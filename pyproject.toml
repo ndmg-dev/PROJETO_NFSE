@@ -1,0 +1,26 @@
+[project]
+name = "nfse-nacional"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+
+# Modo strict nos módulos de domínio (regra do projeto)
+[[tool.mypy.overrides]]
+module = ["app.domain.*", "app.core.dinheiro", "app.adn.*"]
+strict = true
+disallow_any_explicit = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "poc/tests"]
+pythonpath = ["."]
+filterwarnings = ["error::DeprecationWarning"]

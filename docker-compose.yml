@@ -1,0 +1,74 @@
+name: nfse
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nfse
+      POSTGRES_USER: nfse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nfse -d nfse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports: ["5432:5432"]
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: {context: ., args: {INSTALL_DEV: "true"}}
+    env_file: [.env]
+    environment:
+      # A aplicação NUNCA conecta como superusuário: superusuário ignora RLS.
+      DATABASE_URL: postgresql+psycopg://nfse_app:${APP_DB_PASSWORD}@db:5432/nfse
+      # só o alembic usa o dono do schema
+      ADMIN_DATABASE_URL: postgresql+psycopg://nfse:${POSTGRES_PASSWORD}@db:5432/nfse
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    ports: ["8000:8000"]
+    volumes: ["./:/app"]
+    # tmpfs para o PEM temporário — nunca em volume persistente (spec §8)
+    tmpfs: ["/dev/shm:size=64m"]
+
+  worker:
+    build: {context: ., args: {INSTALL_DEV: "true"}}
+    command: celery -A app.workers.celery_app worker -l info
+    env_file: [.env]
+    environment:
+      # A aplicação NUNCA conecta como superusuário: superusuário ignora RLS.
+      DATABASE_URL: postgresql+psycopg://nfse_app:${APP_DB_PASSWORD}@db:5432/nfse
+      # só o alembic usa o dono do schema
+      ADMIN_DATABASE_URL: postgresql+psycopg://nfse:${POSTGRES_PASSWORD}@db:5432/nfse
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    volumes: ["./:/app"]
+    tmpfs: ["/dev/shm:size=64m"]
+
+  beat:
+    build: {context: ., args: {INSTALL_DEV: "true"}}
+    command: celery -A app.workers.celery_app beat -l info
+    env_file: [.env]
+    environment:
+      # A aplicação NUNCA conecta como superusuário: superusuário ignora RLS.
+      DATABASE_URL: postgresql+psycopg://nfse_app:${APP_DB_PASSWORD}@db:5432/nfse
+      # só o alembic usa o dono do schema
+      ADMIN_DATABASE_URL: postgresql+psycopg://nfse:${POSTGRES_PASSWORD}@db:5432/nfse
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis: {condition: service_healthy}
+
+volumes:
+  pgdata:
