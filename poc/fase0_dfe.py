@@ -34,11 +34,12 @@ import sys
 import tempfile
 import time
 import xml.etree.ElementTree as ET
-from collections import Counter, defaultdict
+from collections import Counter
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import httpx
 
@@ -600,16 +601,26 @@ def inspecionar(doc: Documento, escrever: Any) -> None:
 
 
 def montar_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--ambiente", choices=("restrita", "producao"), required=True)
     p.add_argument("--pfx", type=Path, help="caminho do .pfx (ou env NFSE_PFX_PATH)")
     p.add_argument("--nsu-inicial", type=int, default=0)
-    p.add_argument("--cnpj-consulta", help="consultar CNPJ distinto do certificado (mesmo CNPJ raiz)")
+    p.add_argument(
+        "--cnpj-consulta", help="consultar CNPJ distinto do certificado (mesma raiz)"
+    )
     p.add_argument("--competencia", default="2026-08", help="competência do resumo (AAAA-MM)")
     p.add_argument("--saida", type=Path, default=Path("poc/out"))
     p.add_argument("--limite-lotes", type=int, help="para cedo; útil em testes")
-    p.add_argument("--dump-contrato", action="store_true", help="salva e imprime a primeira resposta crua e para")
-    p.add_argument("--inspecionar-xml", action="store_true", help="imprime a árvore do primeiro XML e para")
+    p.add_argument(
+        "--dump-contrato", action="store_true",
+        help="salva e imprime a primeira resposta crua, e para",
+    )
+    p.add_argument(
+        "--inspecionar-xml", action="store_true",
+        help="imprime a árvore de tags do primeiro XML, e para",
+    )
     return p
 
 
