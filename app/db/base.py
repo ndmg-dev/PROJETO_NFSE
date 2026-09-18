@@ -29,6 +29,15 @@ def engine():  # type: ignore[no-untyped-def]
 
 
 @contextmanager
+def criar_sessao() -> Iterator[Session]:
+    """Sessão sem escopo de tenant. Quem usa é responsável por fixá-lo."""
+    engine()
+    assert _Sessao is not None
+    with _Sessao() as s:
+        yield s
+
+
+@contextmanager
 def sessao_do_escritorio(escritorio_id: UUID) -> Iterator[Session]:
     """Abre sessão com RLS ativa para um escritório.
 
