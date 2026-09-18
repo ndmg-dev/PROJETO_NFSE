@@ -1,0 +1,17 @@
+# Segredos — nunca versionar (spec §8)
+*.pfx
+*.p12
+*.pem
+*.key
+.env
+.env.*
+
+# Saída da PoC
+poc/out/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
