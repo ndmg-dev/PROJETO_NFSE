@@ -11,7 +11,13 @@ do Windows para autenticar mTLS com o ADN sem nunca extrair a chave privada.
 este JDK?" — antes de investir na comunicação com a API central, na seleção
 de certificado por CNPJ raiz, ou em qualquer outra parte do agente completo.
 
-`spike/ProvarHandshakeMTLS.java` — sem Maven, sem dependência, um arquivo só.
+`spike/` — sem Maven, sem dependência externa. Três arquivos:
+
+- `Nucleo.java` — a lógica (abrir a store, listar certificados, testar handshake)
+- `ProvarHandshakeMTLS.java` — versão console
+- `ProvarHandshakeMTLSGui.java` — versão com janela (Swing), pensada para quem
+  não quer usar terminal
+- `testar.bat` — duplo clique: confere o Java, compila e abre a janela
 
 ## O que já foi verificado, e o que não foi
 
@@ -26,13 +32,26 @@ importa a partir deste ambiente de desenvolvimento — o mesmo tipo de bloqueio
 da Fase 0 do projeto (lá, falta certificado para falar com o ADN; aqui, falta
 uma máquina Windows para falar com a CryptoAPI).
 
-## Como rodar o teste real
+## Como rodar o teste real (com janela, sem terminal)
 
-Numa estação Windows com JDK 21+ e um certificado A1 instalado em
-`CurrentUser\My`:
+1. Instale o JDK 21 (Temurin) na estação Windows:
+   `https://adoptium.net/temurin/releases/?version=21` — marque "Add to PATH"
+   na instalação.
+2. Copie a pasta `spike/` inteira para a estação (ou só os `.java` e o
+   `testar.bat`).
+3. Dê duplo clique em **`testar.bat`**.
+
+Ele confere se o Java está instalado (e explica o que fazer se não estiver),
+compila os arquivos e abre uma janela com dois botões: "Ver certificados desta
+máquina" e "Testar conexão com um certificado". O resultado aparece na própria
+janela, sem precisar ler saída de terminal.
+
+## Alternativa por linha de comando
+
+Para quem preferir, ou for depurar algo que a janela não mostrou:
 
 ```
-javac ProvarHandshakeMTLS.java
+javac *.java
 java ProvarHandshakeMTLS
 ```
 
@@ -41,8 +60,8 @@ exige certificado de cliente, só para provar que o handshake acontece (não
 valida qual certificado; isso é do lado deles). Para testar contra outro
 endpoint: `java ProvarHandshakeMTLS https://...`.
 
-O programa lista todos os certificados da store antes de escolher (pega o
-primeiro, sem filtro) — é assim que se vê se o A1 esperado aparece.
+Em ambas as versões, o programa lista todos os certificados da store antes de
+testar — é assim que se vê se o A1 esperado aparece, e se está vencido.
 
 ## O que este spike deliberadamente não faz
 
