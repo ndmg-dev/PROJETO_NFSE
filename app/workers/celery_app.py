@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 
 from celery import Celery
-from celery.schedules import crontab
 
 broker = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
@@ -20,20 +19,16 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
 )
 
-celery_app.conf.beat_schedule = {
-    # A cada 4h em dias úteis (spec §3.4).
-    "sincronizar-empresas": {
-        "task": "app.workers.tarefas.sincronizar_todas",
-        "schedule": crontab(hour="6,10,14,18", minute=0, day_of_week="mon-fri"),
-    },
-    # Eventos chegam depois da nota original, então varredura diária própria.
-    "varrer-eventos": {
-        "task": "app.workers.tarefas.varrer_eventos",
-        "schedule": crontab(hour=22, minute=30),
-    },
-    # Alerta de certificado vencendo em 30/15/7 dias (spec §8).
-    "alertar-certificados": {
-        "task": "app.workers.tarefas.alertar_certificados_vencendo",
-        "schedule": crontab(hour=7, minute=0),
-    },
-}
+# AGENDA REVOGADA por §3.3-A (22/09/2026): o servidor não tem mais certificado
+# para chamar o ADN sozinho, então não há mais "sincronizar a cada 4h" nem
+# "varrer eventos à noite" rodando sem o agente. A sincronização passou a ser
+# sob demanda — acionada pelo contador, atendida pelo agente da estação dele
+# (§6, POST /empresas/{id}/sync). Alerta de certificado vencendo também muda
+# de dono: quem vê a validade agora é o agente, lendo a store do Windows, não
+# uma tabela central que deixou de existir.
+#
+# Fica em aberto para a etapa "agente completo": como um alerta de validade ou
+# uma varredura de eventos pode ser reintroduzida sem violar "sob demanda" —
+# por exemplo, o agente reportar a validade a cada sincronização que ele já
+# fizer por iniciativa do contador, em vez de o servidor perguntar sozinho.
+celery_app.conf.beat_schedule: dict[str, dict[str, object]] = {}
