@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -57,23 +57,9 @@ class EmpresaOut(BaseModel):
     ultimo_sync_status: str | None
 
 
-class CertificadoOut(BaseModel):
-    """Só metadados. O .pfx e a senha NUNCA aparecem aqui (spec §8).
-
-    Esta classe é a fronteira: se um campo de segredo for adicionado ao modelo
-    do banco, ele não vaza por acidente, porque precisa ser declarado aqui.
-    """
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    cnpj_raiz: str
-    titular_cnpj: str | None
-    titular_nome: str | None
-    valido_de: date | None
-    valido_ate: date | None
-    ativo: bool
-    dias_para_vencer: int | None = None
+# CertificadoOut foi removido (spec §3.3-A, 22/09/2026): não há mais upload de
+# .pfx nem tabela certificado. O certificado é lido pelo agente local, na
+# estação do contador, e nunca chega a esta API.
 
 
 class Problema(BaseModel):

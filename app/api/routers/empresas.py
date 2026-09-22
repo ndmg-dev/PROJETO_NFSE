@@ -1,23 +1,24 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.adn.certificado import CertificadoError, ler_metadados
 from app.api.deps import exigir_papel, sessao
-from app.api.schemas import CertificadoOut, EmpresaIn, EmpresaOut
-from app.core.cofre import cofre_padrao
+from app.api.schemas import EmpresaIn, EmpresaOut
 from app.core.seguranca import Identidade
-from app.db.models import Certificado, Empresa
+from app.db.models import Empresa
 
 router = APIRouter(prefix="/empresas", tags=["empresas"])
 
-TAMANHO_MAXIMO_PFX = 512 * 1024
+# Upload de certificado foi removido por decisão de arquitetura (spec §3.3-A,
+# 22/09/2026): o .pfx nunca sobe para o servidor. Ele permanece na estação do
+# contador, e um agente local (Java + SunMSCAPI) o usa por lá. O casamento
+# entre "empresa X" e "certificado Y da store" é feito pelo agente, pelo CNPJ
+# raiz — não passa por esta API.
 
 
 @router.get("", response_model=list[EmpresaOut])
@@ -68,85 +69,3 @@ def obter(empresa_id: uuid.UUID, s: Session = Depends(sessao)) -> Empresa:
         # sai como 404, sem revelar que o id existe.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="não encontrada")
     return empresa
-
-
-@router.post(
-    "/{empresa_id}/certificado",
-    response_model=CertificadoOut,
-    status_code=status.HTTP_201_CREATED,
-)
-async def enviar_certificado(
-    empresa_id: uuid.UUID,
-    arquivo: UploadFile = File(...),
-    senha: str = Form(...),
-    s: Session = Depends(sessao),
-    identidade: Identidade = Depends(exigir_papel("admin")),
-) -> Certificado:
-    """Recebe o .pfx e a senha. Nada disso volta na resposta (spec §8)."""
-    empresa = s.get(Empresa, empresa_id)
-    if empresa is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="não encontrada")
-
-    conteudo = await arquivo.read(TAMANHO_MAXIMO_PFX + 1)
-    if len(conteudo) > TAMANHO_MAXIMO_PFX:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="arquivo grande demais para um .pfx",
-        )
-
-    senha_bytes = senha.encode()
-    try:
-        metadados = ler_metadados(conteudo, senha_bytes)
-    except CertificadoError:
-        # str(exc) é sanitizado pelo módulo de certificado; ainda assim não
-        # devolvemos nada além da categoria do erro.
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="certificado inválido ou senha incorreta",
-        ) from None
-
-    if metadados.titular_cnpj and metadados.titular_cnpj[:8] != empresa.cnpj_raiz:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                "o CNPJ raiz do certificado não corresponde ao da empresa; o ADN "
-                "valida a raiz e recusaria a consulta"
-            ),
-        )
-    if metadados.vencido_em(datetime.now(UTC).date()):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="certificado vencido",
-        )
-
-    cofre = cofre_padrao()
-    contexto = f"escritorio:{identidade.escritorio_id}:raiz:{empresa.cnpj_raiz}"
-    certificado = Certificado(
-        id=uuid.uuid4(),
-        escritorio_id=identidade.escritorio_id,
-        cnpj_raiz=empresa.cnpj_raiz,
-        pfx_ciphered=cofre.guardar(conteudo, contexto).bytes_,
-        senha_ciphered=cofre.guardar(senha_bytes, contexto).bytes_,
-        titular_cnpj=metadados.titular_cnpj or None,
-        titular_nome=metadados.titular_nome or None,
-        valido_de=metadados.valido_de,
-        valido_ate=metadados.valido_ate,
-        ativo=True,
-    )
-    s.add(certificado)
-    s.flush()
-    return certificado
-
-
-@router.get("/{empresa_id}/certificados", response_model=list[CertificadoOut])
-def listar_certificados(
-    empresa_id: uuid.UUID, s: Session = Depends(sessao)
-) -> list[Certificado]:
-    empresa = s.get(Empresa, empresa_id)
-    if empresa is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="não encontrada")
-    return list(
-        s.execute(
-            select(Certificado).where(Certificado.cnpj_raiz == empresa.cnpj_raiz)
-        ).scalars()
-    )
