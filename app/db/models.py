@@ -1,7 +1,10 @@
 """Modelo relacional (spec §4).
 
-Duas diferenças deliberadas em relação ao texto da spec, ambas justificadas
-no corpo: `empresa.cnpj_raiz` e o vínculo do certificado por raiz.
+Diferença deliberada em relação ao texto da spec, justificada no corpo:
+`empresa.cnpj_raiz` — o ADN valida a raiz do CNPJ, não o CNPJ completo.
+
+A tabela `certificado` da spec original foi removida por decisão de
+arquitetura (§3.3-A, 22/09/2026): sem custódia central de .pfx.
 """
 
 from __future__ import annotations
@@ -19,7 +22,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    LargeBinary,
     Numeric,
     String,
     Text,
@@ -93,29 +95,10 @@ class Empresa(Base):
     ultimo_sync_status: Mapped[str | None] = mapped_column(Text)
 
 
-class Certificado(Base):
-    """Cofre. Nada aqui sai por API além de titular e validade (spec §8)."""
-
-    __tablename__ = "certificado"
-
-    id: Mapped[uuid.UUID] = _uuid_pk()
-    escritorio_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("escritorio.id"), nullable=False
-    )
-    # DIFERENÇA DA SPEC §4: vinculado ao CNPJ raiz, não a uma empresa.
-    cnpj_raiz: Mapped[str] = mapped_column(String(8), nullable=False)
-    pfx_ciphered: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    senha_ciphered: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    titular_cnpj: Mapped[str | None] = mapped_column(String(14))
-    titular_nome: Mapped[str | None] = mapped_column(Text)
-    valido_de: Mapped[date | None] = mapped_column(Date)
-    valido_ate: Mapped[date | None] = mapped_column(Date)
-    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
-
-    __table_args__ = (
-        UniqueConstraint("escritorio_id", "cnpj_raiz", "titular_cnpj"),
-        Index("ix_certificado_validade", "valido_ate"),
-    )
+# Classe Certificado removida (spec §3.3-A, 22/09/2026): sem custódia central
+# de .pfx. O certificado fica na estação do contador; o agente local o lê
+# diretamente da store do Windows e nunca o envia para cá. Ver migration
+# 0005_remove_certificado.
 
 
 class DfeBruto(Base):
@@ -283,6 +266,6 @@ class AuditLog(Base):
 
 # Tabelas com escopo de tenant — a migration cria política RLS para cada uma.
 TABELAS_COM_RLS: tuple[str, ...] = (
-    "usuario", "empresa", "certificado", "dfe_bruto",
+    "usuario", "empresa", "dfe_bruto",
     "nfse", "nfse_evento", "relatorio",
 )
