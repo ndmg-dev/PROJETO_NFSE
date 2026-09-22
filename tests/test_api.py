@@ -1,13 +1,13 @@
-"""API: autenticação, escopo de tenant e não vazamento de certificado.
+"""API: autenticação e escopo de tenant.
 
-Os testes de vazamento (spec §8) varrem o corpo inteiro da resposta e os logs,
-não só os campos que lembramos de checar.
+Upload de certificado foi removido daqui por decisão de arquitetura (spec
+§3.3-A, 22/09/2026): o .pfx nunca sobe para o servidor, então não há mais
+endpoint, nem cifra, nem teste de vazamento de .pfx nesta camada — o
+certificado passou a ser problema exclusivo do agente local.
 """
 
 from __future__ import annotations
 
-import io
-import logging
 import uuid
 
 import pytest
@@ -16,8 +16,8 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.core.seguranca import hash_senha
-from tests.test_certificado import CNPJ, SENHA, gerar_pfx
 
+CNPJ = "07199546000162"
 SENHA_USUARIO = "senha-de-teste-123"
 
 
@@ -54,8 +54,6 @@ def cenario(engine_admin: Engine):  # type: ignore[no-untyped-def]
     yield dados
     with engine_admin.begin() as c:
         for v in dados.values():
-            c.execute(text("DELETE FROM certificado WHERE escritorio_id=:e"),
-                      {"e": v["escritorio"]})
             c.execute(text("DELETE FROM empresa WHERE escritorio_id=:e"), {"e": v["escritorio"]})
             c.execute(text("DELETE FROM usuario WHERE escritorio_id=:e"), {"e": v["escritorio"]})
             c.execute(text("DELETE FROM escritorio WHERE id=:e"), {"e": v["escritorio"]})
@@ -125,116 +123,7 @@ def test_nao_le_empresa_de_outro_por_id(cliente: TestClient, cenario) -> None:  
     assert r.status_code == 404, "vazou empresa de outro escritório"
 
 
-def test_nao_envia_certificado_para_empresa_de_outro(cliente: TestClient, cenario) -> None:  # type: ignore[no-untyped-def]
-    alvo = cenario["b"]["empresa"]
-    r = cliente.post(
-        f"/empresas/{alvo}/certificado",
-        headers=entrar(cliente, "a@teste.com"),
-        files={"arquivo": ("c.pfx", io.BytesIO(gerar_pfx()), "application/x-pkcs12")},
-        data={"senha": SENHA.decode()},
-    )
-    assert r.status_code == 404
-
-
-# ------------------------------------------------------------ certificado ---
-
-def test_upload_devolve_so_metadados(cliente: TestClient, cenario) -> None:  # type: ignore[no-untyped-def]
-    pfx = gerar_pfx()
-    r = cliente.post(
-        f"/empresas/{cenario['a']['empresa']}/certificado",
-        headers=entrar(cliente, "a@teste.com"),
-        files={"arquivo": ("c.pfx", io.BytesIO(pfx), "application/x-pkcs12")},
-        data={"senha": SENHA.decode()},
-    )
-    assert r.status_code == 201, r.text
-    corpo = r.json()
-    assert corpo["titular_cnpj"] == CNPJ
-    assert set(corpo) == {
-        "id", "cnpj_raiz", "titular_cnpj", "titular_nome",
-        "valido_de", "valido_ate", "ativo", "dias_para_vencer",
-    }
-
-
-def test_resposta_nao_contem_pfx_nem_senha(cliente: TestClient, cenario) -> None:  # type: ignore[no-untyped-def]
-    """Varre o corpo cru, não só os campos que lembramos de checar."""
-    pfx = gerar_pfx()
-    r = cliente.post(
-        f"/empresas/{cenario['a']['empresa']}/certificado",
-        headers=entrar(cliente, "a@teste.com"),
-        files={"arquivo": ("c.pfx", io.BytesIO(pfx), "application/x-pkcs12")},
-        data={"senha": SENHA.decode()},
-    )
-    bruto = r.content
-    assert SENHA not in bruto
-    assert pfx[:64] not in bruto
-    assert b"pfx_ciphered" not in bruto
-    assert b"senha_ciphered" not in bruto
-    assert b"PRIVATE KEY" not in bruto
-
-
-def test_senha_nao_aparece_em_log(cliente: TestClient, cenario, caplog) -> None:  # type: ignore[no-untyped-def]
-    with caplog.at_level(logging.DEBUG):
-        cliente.post(
-            f"/empresas/{cenario['a']['empresa']}/certificado",
-            headers=entrar(cliente, "a@teste.com"),
-            files={"arquivo": ("c.pfx", io.BytesIO(gerar_pfx()), "application/x-pkcs12")},
-            data={"senha": SENHA.decode()},
-        )
-    assert SENHA.decode() not in caplog.text
-
-
-def test_senha_errada_no_upload(cliente: TestClient, cenario) -> None:  # type: ignore[no-untyped-def]
-    r = cliente.post(
-        f"/empresas/{cenario['a']['empresa']}/certificado",
-        headers=entrar(cliente, "a@teste.com"),
-        files={"arquivo": ("c.pfx", io.BytesIO(gerar_pfx()), "application/x-pkcs12")},
-        data={"senha": "errada"},
-    )
-    assert r.status_code == 422
-    assert "errada" not in r.text
-
-
-def test_recusa_certificado_de_raiz_diferente(cliente: TestClient, cenario) -> None:  # type: ignore[no-untyped-def]
-    """O ADN valida o CNPJ raiz — recusar aqui evita falha só na sincronização."""
-    outro = gerar_pfx(cn="OUTRA EMPRESA LTDA:11222333000181")
-    r = cliente.post(
-        f"/empresas/{cenario['a']['empresa']}/certificado",
-        headers=entrar(cliente, "a@teste.com"),
-        files={"arquivo": ("c.pfx", io.BytesIO(outro), "application/x-pkcs12")},
-        data={"senha": SENHA.decode()},
-    )
-    assert r.status_code == 422
-    assert "raiz" in r.json()["detail"]
-
-
-def test_recusa_certificado_vencido(cliente: TestClient, cenario) -> None:  # type: ignore[no-untyped-def]
-    vencido = gerar_pfx(dias_validade=-2)
-    r = cliente.post(
-        f"/empresas/{cenario['a']['empresa']}/certificado",
-        headers=entrar(cliente, "a@teste.com"),
-        files={"arquivo": ("c.pfx", io.BytesIO(vencido), "application/x-pkcs12")},
-        data={"senha": SENHA.decode()},
-    )
-    assert r.status_code == 422
-
-
-def test_pfx_fica_cifrado_no_banco(cliente: TestClient, cenario, engine_admin) -> None:  # type: ignore[no-untyped-def]
-    pfx = gerar_pfx()
-    cliente.post(
-        f"/empresas/{cenario['a']['empresa']}/certificado",
-        headers=entrar(cliente, "a@teste.com"),
-        files={"arquivo": ("c.pfx", io.BytesIO(pfx), "application/x-pkcs12")},
-        data={"senha": SENHA.decode()},
-    )
-    with engine_admin.begin() as c:
-        linha = c.execute(
-            text("SELECT pfx_ciphered, senha_ciphered FROM certificado "
-                 "WHERE escritorio_id = :e"),
-            {"e": cenario["a"]["escritorio"]},
-        ).one()
-    assert bytes(linha[0]) != pfx, "o .pfx foi gravado em claro"
-    assert SENHA not in bytes(linha[1])
-
+# --------------------------------------------------------------- cadastro ---
 
 def test_cnpj_invalido_no_cadastro(cliente: TestClient, cenario) -> None:  # type: ignore[no-untyped-def]
     r = cliente.post("/empresas", headers=entrar(cliente, "a@teste.com"),

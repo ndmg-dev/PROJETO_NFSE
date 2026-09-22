@@ -4,7 +4,9 @@ Captura NFS-e do padrão nacional (ADN / gov.br) para vários CNPJs, cada um com
 seu certificado A1, e gera relatórios fiscais. Substitui a exportação manual de
 planilhas do Portal Nacional, uma empresa e um mês por vez.
 
-Fonte da verdade do projeto: [spec-nfse-nacional.md](spec-nfse-nacional.md).
+Fonte da verdade do projeto: [spec-nfse-nacional.md](spec-nfse-nacional.md),
+incluindo o adendo de arquitetura §3.3-A (22/09/2026) — leia-o antes de mexer
+em autenticação ou sincronização.
 
 ## Estado
 
@@ -12,21 +14,40 @@ Fonte da verdade do projeto: [spec-nfse-nacional.md](spec-nfse-nacional.md).
 |---|---|
 | **0 — PoC contra o ADN** | **bloqueada**: falta o certificado A1 |
 | 1 — infra, dinheiro, schema, RLS | pronta |
-| 1 — cofre, autenticação, API | pronta |
+| 1 — autenticação, API de empresas | pronta |
 | 1 — relatório com paridade de portal | pronta |
-| 1 — parser e sincronização | mecânica pronta; contrato do ADN pendente |
+| 1 — parser e sincronização (mecânica) | pronta; contrato do ADN pendente |
+| 1 — agente local (Java + `SunMSCAPI`) | **spike**, não verificado — precisa de estação Windows |
 | 2, 3 | não iniciadas |
 
-243 testes. Tudo roda em container.
+211 testes Python. Tudo roda em container.
 
 ```bash
 cp .env.exemplo .env      # preencha os segredos
 make up && make migrate
-make test                 # 243 testes
+make test                 # 211 testes
 make lint types reversivel
 ```
 
-## O que falta para desbloquear
+## Mudança de arquitetura (22/09/2026)
+
+O certificado A1 **não sobe mais para o servidor**. Decisão registrada em
+§3.3-A da spec: ele fica na estação do contador, e um agente local o usa por
+lá via CryptoAPI/`SunMSCAPI` do Windows — a chave privada nunca é extraída,
+exportável ou não. A sincronização deixou de ser agendada (Celery Beat) e
+passou a ser **sob demanda**, acionada pelo contador.
+
+Consequência prática: o cofre de certificados da Fase 1 (upload de `.pfx`,
+cifra envelope, tabela `certificado`) foi removido — não só desativado. A
+migration `0005_remove_certificado.py` desfaz a tabela; o histórico de por que
+existia e por que caiu está no próprio commit e na spec.
+
+Um spike isolado prova (ou não) que o handshake mTLS via `SunMSCAPI` funciona:
+[agente/README.md](agente/README.md). **Ainda não foi executado** — só compila
+neste ambiente Linux; a prova real exige uma estação Windows com o certificado
+instalado.
+
+## O que falta para desbloquear a Fase 0
 
 Um arquivo `.pfx` da AB Engenharia (CNPJ raiz `07.199.546`) nesta máquina. Com
 ele, a sequência está em [poc/README.md](poc/README.md): descobrir o contrato
@@ -37,21 +58,22 @@ a referência.
 Não há atalho: o Manual dos Contribuintes v1.0 não documenta o formato das
 respostas, e o Swagger da produção restrita exige certificado de cliente.
 
-## Duas coisas que precisam de decisão sua
+## O que falta para desbloquear o agente
 
-**O cofre está abaixo do exigido pela spec §8.** A chave mestra vem do `.env`;
-a spec pede KMS. Serve para desenvolvimento. Antes de qualquer certificado de
-cliente real entrar, `EnvolucroKMS` em [app/core/cofre.py](app/core/cofre.py)
-precisa ser implementado — hoje ele levanta `NotImplementedError` em vez de
-fingir que cifra.
+Uma estação Windows com JDK 21+ para rodar o spike de verdade. Se
+`SunMSCAPI` tiver o atrito na autenticação de cliente que o histórico do
+OpenJDK relata, a abordagem muda (JNA direto na CryptoAPI, ou .NET) — por
+isso o spike vem antes do agente completo, não depois.
+
+## Uma decisão que ainda falta
 
 **Não existe procuração eletrônica para as APIs do ADN.** O manual exige
 certificado com o mesmo CNPJ raiz do contribuinte consultado. A FENACON pediu
-procuração à Receita em 10/06/2026 e não houve resposta até aqui. Na prática: o
-escritório precisa custodiar um A1 por grupo econômico, e o termo de custódia
-da §8 é requisito, não boa prática.
+procuração à Receita em 10/06/2026 e não houve resposta até aqui. Isso não
+muda com o agente local — o certificado ainda precisa ser o do próprio
+contribuinte (ou da matriz, para as filiais).
 
-## Onde as incógnitas moram
+## Onde as incógnitas do ADN moram
 
 Duas fronteiras, ambas marcadas no código e nenhuma espalhada pelo sistema:
 
