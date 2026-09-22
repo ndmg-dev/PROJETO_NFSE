@@ -16,7 +16,8 @@ class Config(BaseSettings):
     redis_url: str = Field(alias="REDIS_URL")
 
     # SecretStr para não vazar em repr/log/traceback — a §8 proíbe.
-    cofre_master_key: SecretStr = Field(alias="COFRE_MASTER_KEY")
+    # COFRE_MASTER_KEY removida (spec §3.3-A, 22/09/2026): sem cofre central,
+    # não há mais chave mestra para o servidor guardar.
     jwt_secret: SecretStr = Field(alias="JWT_SECRET")
 
     ambiente_adn: Literal["restrita", "producao"] = Field(
@@ -25,7 +26,7 @@ class Config(BaseSettings):
     access_token_minutos: int = 15
     refresh_token_dias: int = 7
 
-    @field_validator("cofre_master_key", "jwt_secret")
+    @field_validator("jwt_secret")
     @classmethod
     def _exigir_segredo_forte(cls, v: SecretStr) -> SecretStr:
         import base64
