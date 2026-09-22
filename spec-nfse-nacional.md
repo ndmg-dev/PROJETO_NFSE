@@ -118,6 +118,25 @@ def build_client(pfx_bytes: bytes, password: bytes, base_url: str) -> httpx.Clie
 
 Regras: o PEM temporário vive em **tmpfs** e é removido no `finally`; a senha nunca vai para log; um pool de clientes por empresa evita reconstruir o contexto TLS a cada chamada.
 
+### 3.3-A. ADENDO (22/09/2026) — custódia sai do servidor, agente local entra
+
+**Revoga a custódia central de certificado descrita acima e em §4/§6/§8.** Decisão do solicitante, registrada aqui em vez de contornada em silêncio (regra 8 do projeto).
+
+**O que muda:**
+
+- O `.pfx` **nunca sobe para o servidor**. Ele continua onde já está hoje: instalado no repositório do Windows (`CurrentUser\My`) da estação de cada contador.
+- Um **agente local**, instalado na estação do contador, lê o certificado diretamente da store do Windows via CryptoAPI/CNG — sem nunca extrair a chave privada, exportável ou não.
+- **Tecnologia do agente: Java, com o provider `SunMSCAPI`** (`KeyStore.getInstance("Windows-MY", "SunMSCAPI")`). É um provider padrão do JDK, feito exatamente para isto: TLS de cliente usando certificado da store do Windows. Empacotado com `jpackage` como instalador nativo — o contador não instala JDK à parte.
+  - Atenção conhecida: há relatos de atrito específico na autenticação TLS de cliente com `SunMSCAPI` (não é só leitura de certificado). Por isso o projeto começa por um **spike isolado** (`agente/`) que só prova o handshake mTLS antes de construir o resto.
+  - `SunMSCAPI` não tem controle de senha por certificado: qualquer processo rodando como aquele usuário do Windows acessa qualquer certificado da store sem prompt. Mesmo modelo de segurança do navegador — não é risco novo, mas é diferente do cofre cifrado que caiu.
+- **A sincronização deixa de ser agendada e passa a ser sob demanda.** O contador aciona pela tela; não há mais Celery Beat rodando a cada 4h esperando um certificado que pode não estar disponível (estação desligada, contador deslogado). O modelo por NSU já tolera isso: retoma de onde parou, e o alerta de `nsu_lag` (§9) passa a cobrir "sem sincronizar há X dias" em vez de "atrasou 4h".
+- **Fluxo:** contador clica "sincronizar" → API cria o pedido (mesmo contrato de `POST /empresas/{id}/sync`, 202 + task_id, §6) → o agente da estação daquele contador identifica o pedido (poll ou SSE) → agente faz o mTLS com o ADN e devolve os bytes crus da resposta para a API → o servidor interpreta a resposta (parser, checkpoint, idempotência — lógica já escrita e testada, indiferente a quem fez a chamada de rede) e persiste.
+- **Consequência prática:** o agente é "burro" de propósito — só seguro o certificado e transporta bytes. Toda a lógica de contrato do ADN, checkpoint, idempotência e detecção de lacuna continua em Python, testada, um lugar só. Isso evita duplicar em Java a mesma hipótese de contrato que §3.2 já isola.
+
+**O que cai, do que estava planejado em §4/§6/§8:** tabela `certificado`, upload de `.pfx` por API, cofre com KMS/Vault. O maior risco do projeto (§8, custódia de N certificados) deixa de existir por desenho — não porque foi mitigado, porque o servidor nunca chega a tocar o segredo.
+
+**O que fica em aberto:** o protocolo exato entre agente e servidor (fila de pedidos, autenticação do próprio agente, como casar "empresa X no sistema" com "certificado Y na store pelo CNPJ raiz") é desenho da próxima etapa ("agente completo"), depois do spike validar o handshake.
+
 ### 3.4 Algoritmo de sincronização
 
 ```
@@ -172,13 +191,9 @@ create table empresa (
   unique (escritorio_id, cnpj)
 );
 
-create table certificado (
-  id uuid primary key, empresa_id uuid references empresa not null,
-  pfx_ciphered bytea not null,        -- envelope KMS
-  senha_ciphered bytea not null,
-  titular_cnpj char(14), valido_de date, valido_ate date,
-  ativo bool default true
-);
+-- REVOGADA pelo adendo de §3.3-A (22/09/2026): sem custódia central, sem
+-- tabela certificado. O agente local nunca envia .pfx/senha para o servidor.
+-- create table certificado ( ... );
 
 -- documentos
 create table dfe_bruto (
@@ -294,10 +309,13 @@ GET    /empresas                        → lista (paginada, escopo do escritór
 POST   /empresas                        → cadastra CNPJ
 GET    /empresas/{id}
 PATCH  /empresas/{id}                   → sync_ativo, dados cadastrais
-POST   /empresas/{id}/certificado       → upload .pfx + senha (multipart)
-DELETE /empresas/{id}/certificado/{cid}
+-- REVOGADO por §3.3-A: sem upload de certificado. O agente local casa
+-- "empresa X" com "certificado Y da store" pelo CNPJ raiz, sem passar pela API.
+-- POST   /empresas/{id}/certificado       → upload .pfx + senha (multipart)
+-- DELETE /empresas/{id}/certificado/{cid}
 
-POST   /empresas/{id}/sync              → dispara sincronização (202 + task_id)
+POST   /empresas/{id}/sync              → dispara sincronização sob demanda; o agente
+                                          da estação do contador atende o pedido (§3.3-A)
 GET    /empresas/{id}/sync/status       → ultimo_nsu, status, pendências
 GET    /sync/eventos                    → SSE com progresso em tempo real
 
@@ -343,7 +361,15 @@ Regras:
 
 Este é o capítulo que decide se o sistema pode existir em um escritório contábil.
 
-**Certificados digitais.** O .pfx e a senha são credenciais que permitem assinar em nome do cliente. Exigências mínimas:
+> **Revisado por §3.3-A (22/09/2026):** com o certificado ficando na estação do
+> contador e nunca subindo para o servidor, os itens abaixo (KMS, decifrar em
+> memória do worker, alerta de vencimento) deixam de ser responsabilidade do
+> servidor e passam a ser do agente local — que lê metadados de validade
+> diretamente da store do Windows, sem precisar decifrar nada. O texto original
+> fica como registro de por que a custódia central foi descartada, não como
+> especificação vigente.
+
+**Certificados digitais (histórico — arquitetura revogada).** O .pfx e a senha são credenciais que permitem assinar em nome do cliente. Exigências mínimas:
 
 - Cifrados em repouso com chave gerenciada por KMS (AWS KMS, GCP KMS ou HashiCorp Vault) — **não** com chave no `.env`.
 - Decifrados apenas em memória do worker, pelo tempo da requisição; PEM temporário em tmpfs.
