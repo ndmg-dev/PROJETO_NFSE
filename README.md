@@ -8,6 +8,64 @@ Fonte da verdade do projeto: [spec-nfse-nacional.md](spec-nfse-nacional.md),
 incluindo o adendo de arquitetura §3.3-A (22/09/2026) — leia-o antes de mexer
 em autenticação ou sincronização.
 
+## Como instalar
+
+Este repositório tem duas partes que se instalam em lugares diferentes, para
+públicos diferentes. Não existe um "instalador único" porque a arquitetura
+não é uma coisa só (§3.3-A): o backend roda num servidor; o agente roda na
+estação de cada contador.
+
+### Backend (API, banco, worker) — num servidor Linux com Docker
+
+Requisitos: Docker e Docker Compose. Nada de Python, Postgres ou Redis
+instalado à parte — tudo roda em container.
+
+```bash
+git clone https://github.com/ndmg-dev/PROJETO_NFSE.git
+cd PROJETO_NFSE
+cp .env.exemplo .env
+```
+
+Abra o `.env` e gere os dois segredos pedidos (a senha do Postgres pode ser
+qualquer texto forte; o `JWT_SECRET` precisa dos 32 bytes em base64):
+
+```bash
+python3 -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
+```
+
+Depois:
+
+```bash
+make up          # sobe Postgres e Redis
+make migrate     # aplica o schema
+make test        # 211 testes — confirma que a instalação está íntegra
+```
+
+Se `make` não existir na máquina, os comandos equivalentes estão no
+[Makefile](Makefile) — são só chamadas de `docker compose`.
+
+**Este backend ainda não emite nem consulta nada no ADN.** A Fase 0 (prova de
+conceito) está bloqueada por falta de certificado — ver mais abaixo.
+
+### Agente (spike) — na estação Windows do contador
+
+Esta parte não usa Docker nem o restante do repositório. É um teste isolado
+para validar se dá para usar o certificado A1 que já está instalado na
+estação, sem exportá-lo.
+
+1. Instale o JDK 21 (Temurin):
+   `https://adoptium.net/temurin/releases/?version=21` — marque **"Add to
+   PATH"** durante a instalação.
+2. Copie a pasta [agente/spike/](agente/spike/) para a estação Windows
+   (pendrive, e-mail, o que for mais simples — não precisa clonar o
+   repositório inteiro ali).
+3. Dê duplo clique em **`testar.bat`**.
+
+O `.bat` confere se o Java está instalado, compila os arquivos e abre uma
+janela com dois botões: ver os certificados da máquina e testar uma conexão
+usando um deles. Detalhes, o que esperar na tela e o que fazer se der erro
+estão em [agente/README.md](agente/README.md).
+
 ## Estado
 
 | Fase | Situação |
