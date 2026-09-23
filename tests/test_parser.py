@@ -15,6 +15,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.domain.liquido import analisar_liquido
 from app.domain.parser import (
     XmlInvalido,
     inspecionar_layout,
@@ -188,3 +189,59 @@ def test_inspecionar_layout_mostra_a_arvore() -> None:
     assert "NFSe" in saida
     assert "dCompet" in saida
     assert "vServ = 1500.00" in saida
+
+
+# ------------------------------------------------ líquido e retenções ------
+
+RETENCOES_DA_NOTA_REAL = (
+    "<vTotalRet>0</vTotalRet><vLiq>12000.00</vLiq>"
+    "<tribFed><piscofins><vPis>78.00</vPis><vCofins>360.00</vCofins></piscofins>"
+    "<vRetIRRF>180.00</vRetIRRF><vRetCSLL>120.00</vRetCSLL></tribFed>"
+    "<tpRetISSQN>1</tpRetISSQN>"
+)
+
+
+def test_extrai_liquido_e_retencoes() -> None:
+    d = parse_nfse(nfse(valor="12000.00", extra=RETENCOES_DA_NOTA_REAL))
+    assert d.valor_liquido_declarado == Decimal("12000.00")
+    assert d.total_retencoes_declarado == Decimal("0.00")
+    assert d.irrf == Decimal("180.00")
+    assert d.contrib_sociais_retidas == Decimal("120.00")
+    assert d.pis_debito == Decimal("78.00")
+    assert d.cofins_debito == Decimal("360.00")
+    assert d.issqn_retido is False
+
+
+def test_retencao_ausente_e_none_nao_zero() -> None:
+    """Sem a tag, não houve declaração — e isso não é R$ 0,00."""
+    d = parse_nfse(nfse())
+    assert d.irrf is None
+    assert d.valor_liquido_declarado is None
+    assert d.issqn_retido is None
+
+
+@pytest.mark.parametrize(
+    "codigo,esperado", [("1", False), ("2", True), ("3", True)]
+)
+def test_codigo_de_retencao_do_issqn(codigo: str, esperado: bool) -> None:
+    d = parse_nfse(nfse(extra=f"<tpRetISSQN>{codigo}</tpRetISSQN>"))
+    assert d.issqn_retido is esperado
+
+
+def test_codigo_de_retencao_desconhecido_nao_vira_palpite() -> None:
+    d = parse_nfse(nfse(extra="<tpRetISSQN>9</tpRetISSQN>"))
+    assert d.issqn_retido is None
+    assert "issqn_retido:codigo_desconhecido" in d.campos_ausentes
+
+
+def test_do_xml_ate_o_alerta_de_liquido() -> None:
+    """Ponta a ponta: o XML da nota do áudio dispara a divergência."""
+    xml = nfse(
+        valor="12000.00",
+        extra=RETENCOES_DA_NOTA_REAL
+        + "<xDescServ>Honorarios. Valor líquido: R$ 11.262,00</xDescServ>",
+    )
+    analise = analisar_liquido(parse_nfse(xml))
+    assert analise.situacao == "retencao_nao_abatida"
+    assert analise.cenario_da_descricao == "ampliado"
+    assert analise.requer_atencao
