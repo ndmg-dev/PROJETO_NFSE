@@ -19,3 +19,8 @@ poc/out/
 
 # o exemplo é público de propósito — não contém segredo
 !.env.exemplo
+
+# PDFs soltos na raiz são notas reais de clientes (conta bancária, e-mail,
+# CNPJ). O repositório é público: nunca versionar. Para teste, usar XML
+# anonimizado (spec §10).
+/*.pdf
