@@ -418,11 +418,65 @@ O último é o critério de aceite mais importante do MVP: reproduzir agosto/202
 | CNPJ raiz do certificado limita a consulta | Médio | Coleta de um A1 por grupo econômico; validar no cadastro |
 | Certificado vencido interrompe a captura silenciosamente | Médio | Alerta proativo por validade e por falha de handshake |
 
+### 11.1 Evidências novas (23/09/2026): duas notas do mesmo prestador
+
+Duas notas do mesmo prestador (sociedade de advogados, São Paulo/SP) para o
+mesmo tomador (Petrolina/PE), ambas de R$ 12.000,00 com as mesmas retenções
+federais (IRRF 180, CSLL 120, COFINS 360, PIS 78; total 738), emitidas com dois
+meses de diferença. A **nota A** (março/2026) tem o layout da prefeitura. A
+**nota B** (maio/2026) é um DANFSe nacional v2.0. Descrições de participantes
+omitidas de propósito: este repositório é público.
+
+| | Nota A — layout da prefeitura | Nota B — DANFSe nacional v2.0 |
+|---|---|---|
+| Identificação | número + código de verificação | chave de acesso de 50 dígitos |
+| Campo "valor líquido" | não existe | existe, **igual ao bruto** |
+| PIS / COFINS | no mesmo bloco de IRRF, CSLL e INSS, sem qualificação | rotulados "Débito Apuração Própria" |
+| Líquido escrito na descrição | R$ 11.262,00 | R$ 11.262,00 |
+
+**H1 — Cobertura do ADN varia por período, não só por município.** A nota A
+não tem chave de 50 dígitos, então provavelmente não foi distribuída pelo ADN;
+a nota B tem. Hipótese: São Paulo passou a distribuir no padrão nacional entre
+março e maio de 2026 (a referência de agosto/2026 já traz 30 notas de SP com
+chave). *Não confirmada.* Consequência se for verdade: competências anteriores
+à migração de um município ficam incompletas quando vêm só do ADN, e isso **não
+é falha de sincronização**. Os relatórios devem mostrar cobertura por município
+e período, e não um total que pareça completo.
+
+*Como testar na Fase 0, sem depender de outro certificado:* com o A1 da AB
+Engenharia, baixar a fila inteira e agrupar as notas de SP (IBGE `3550308` nos
+sete primeiros dígitos da chave) por mês de emissão. A primeira competência com
+chave indica quando SP passou a distribuir. Confirmar a ausência anterior contra
+o contas a pagar da AB, porque a planilha do portal, sozinha, não prova o que
+nunca chegou ao ambiente nacional.
+
+**H2 — A conversão do layout municipal para o nacional criou um "valor líquido"
+que não abate as retenções.** No layout antigo não há campo de líquido, então
+nada podia ficar inconsistente; no nacional o campo aparece sem a dedução e PIS
+e COFINS mudam de rótulo. Compatível com o problema relatado pela equipe fiscal
+(o analista lê o líquido e conclui que não houve retenção). *Inferência, não
+confirmada:* só o emitente ou a prefeitura podem confirmar. Tratamento adotado:
+o sistema nunca confia no líquido declarado e recalcula em dois cenários
+(`app/domain/liquido.py`), sem decidir se PIS/COFINS são retenção — decisão
+fiscal de quem escritura. O fato de as duas descrições trazerem o mesmo líquido
+mostra que as partes sempre abateram os quatro tributos, mas isso não resolve o
+rótulo.
+
+**Nota municipal fora do MVP, e o que ela exige do schema.** A nota A é
+exatamente o caso que §1 e §11 deixam fora do MVP. Hoje `nfse.chave_acesso` é
+`NOT NULL` e de 50 caracteres, então uma nota assim não cabe. Quando a Fase 3
+tratar municípios fora do padrão nacional, será preciso uma identidade
+alternativa (origem + CNPJ do prestador + número + código de verificação).
+Nada muda agora.
+
+**Casamento de partes.** O nome do tomador difere entre as duas notas (`&`
+transliterado para `E`). Casar sempre por CNPJ, nunca por nome.
+
 ---
 
 ## 12. Roadmap
 
-**Fase 0 — Prova de conceito (1–2 semanas).** Script isolado: certificado A1 da AB Engenharia → `GET /contribuintes/DFe/{NSU}` em produção restrita e produção → contar documentos de agosto/2026 e comparar com as 78 notas da planilha. **Gate de decisão**: se a API não devolver o mesmo conjunto, o problema é de cobertura e a arquitetura muda.
+**Fase 0 — Prova de conceito (1–2 semanas).** Script isolado: certificado A1 da AB Engenharia → `GET /contribuintes/DFe/{NSU}` em produção restrita e produção → contar documentos de agosto/2026 e comparar com as 78 notas da planilha. **Gate de decisão**: se a API não devolver o mesmo conjunto, o problema é de cobertura e a arquitetura muda. Verificação adicional (§11.1, H1): agrupar as notas de SP por mês de emissão para achar quando o município passou a distribuir no ADN.
 
 **Fase 1 — MVP (4–6 semanas).** Multi-empresa, cofre de certificados, sincronização agendada, parser, relatório com paridade de portal em XLSX, UI de consulta.
 
