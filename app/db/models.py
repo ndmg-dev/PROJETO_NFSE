@@ -203,6 +203,12 @@ class Nfse(Base):
     contrib_previd_retida: Mapped[Decimal | None] = mapped_column(Dinheiro)
     pct_total_tributos_sn: Mapped[Decimal | None] = mapped_column(Aliquota)
 
+    # Líquido e total de retenções COMO DECLARADOS na nota. Não entram no export
+    # do portal (60 colunas, sem líquido) e nunca são confiados: a análise em
+    # app/domain/liquido.py recalcula a partir das retenções destacadas.
+    valor_liquido_declarado: Mapped[Decimal | None] = mapped_column(Dinheiro)
+    total_retencoes_declarado: Mapped[Decimal | None] = mapped_column(Dinheiro)
+
     informacoes_complementares: Mapped[str | None] = mapped_column(Text)
     situacao: Mapped[str] = mapped_column(Text, nullable=False, default="Normal")
     dfe_bruto_id: Mapped[int | None] = mapped_column(ForeignKey("dfe_bruto.id"))
