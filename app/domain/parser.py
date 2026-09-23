@@ -41,7 +41,21 @@ TAGS: Final[dict[str, tuple[str, ...]]] = {
     "item_nbs": ("cNBS", "ItemNBS"),
     "descricao_servico": ("xDescServ", "Discriminacao", "DescricaoServico"),
     "informacoes_complementares": ("xInfComp", "InformacoesComplementares"),
+    # Líquido e retenções (usados por app/domain/liquido.py). HIPÓTESE, como
+    # todas as tags deste dicionário: confirmar contra o XSD e um XML real.
+    "valor_liquido_declarado": ("vLiq", "ValorLiquido"),
+    "total_retencoes_declarado": ("vTotalRet", "TotalRetencoes"),
+    "irrf": ("vRetIRRF", "vIRRF"),
+    "contrib_sociais_retidas": ("vRetCSLL", "vCSLL"),
+    "contrib_previd_retida": ("vRetCP", "vINSS"),
+    "pis_debito": ("vPis", "vPIS"),
+    "cofins_debito": ("vCofins", "vCOFINS"),
 }
+TAGS_ISSQN_RETIDO: Final[tuple[str, ...]] = ("tpRetISSQN", "TipoRetencaoISSQN")
+# HIPÓTESE sobre o significado dos códigos (1 não retido, 2 retido pelo tomador,
+# 3 retido pelo intermediário). Código fora desta tabela vira None + registro
+# em campos_ausentes, nunca um palpite.
+CODIGOS_ISSQN_RETIDO: Final[dict[str, bool]] = {"1": False, "2": True, "3": True}
 TAGS_BLOCO: Final[dict[str, tuple[str, ...]]] = {
     "prestador": ("prest", "emit", "Prestador", "Emitente"),
     "tomador": ("toma", "Tomador"),
@@ -76,6 +90,14 @@ class NFSeDTO:
     base_calculo: Decimal | None = None
     aliquota_issqn: Decimal | None = None
     valor_issqn: Decimal | None = None
+    issqn_retido: bool | None = None
+    valor_liquido_declarado: Decimal | None = None
+    total_retencoes_declarado: Decimal | None = None
+    irrf: Decimal | None = None
+    contrib_sociais_retidas: Decimal | None = None
+    contrib_previd_retida: Decimal | None = None
+    pis_debito: Decimal | None = None
+    cofins_debito: Decimal | None = None
     cod_tributacao_nacional: str | None = None
     item_nbs: str | None = None
     descricao_servico: str | None = None
@@ -209,6 +231,13 @@ def parse_nfse(xml: bytes) -> NFSeDTO:
         ("base_calculo", dinheiro),
         ("valor_issqn", dinheiro),
         ("aliquota_issqn", aliquota),
+        ("valor_liquido_declarado", dinheiro),
+        ("total_retencoes_declarado", dinheiro),
+        ("irrf", dinheiro),
+        ("contrib_sociais_retidas", dinheiro),
+        ("contrib_previd_retida", dinheiro),
+        ("pis_debito", dinheiro),
+        ("cofins_debito", dinheiro),
     ):
         bruto = _texto(raiz, TAGS[campo])
         if bruto is None:
@@ -217,6 +246,13 @@ def parse_nfse(xml: bytes) -> NFSeDTO:
             setattr(dto, campo, conversor(bruto))
         except ValorInvalidoError:
             dto.campos_ausentes.append(f"{campo}:ilegivel")
+
+    codigo_retencao = _texto(raiz, TAGS_ISSQN_RETIDO)
+    if codigo_retencao is not None:
+        if codigo_retencao in CODIGOS_ISSQN_RETIDO:
+            dto.issqn_retido = CODIGOS_ISSQN_RETIDO[codigo_retencao]
+        else:
+            dto.campos_ausentes.append("issqn_retido:codigo_desconhecido")
 
     prestador = _bloco(raiz, TAGS_BLOCO["prestador"])
     dto.prestador_cnpj = _documento(prestador)
