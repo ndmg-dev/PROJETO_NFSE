@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NFS-e Nacional — Painel</title>
+<style>
+  :root { --azul:#1e40af; --azul2:#2563eb; --cinza:#f1f5f9; --borda:#e2e8f0; --txt:#0f172a; --sub:#64748b; --verde:#16a34a; --vermelho:#dc2626; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif; color:var(--txt); background:var(--cinza); }
+  header { background:var(--azul); color:#fff; padding:16px 24px; display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size:18px; margin:0; font-weight:600; }
+  header .who { font-size:13px; opacity:.9; }
+  main { max-width:960px; margin:24px auto; padding:0 16px; }
+  .card { background:#fff; border:1px solid var(--borda); border-radius:12px; padding:20px; margin-bottom:20px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .card h2 { margin:0 0 14px; font-size:15px; }
+  label { display:block; font-size:12px; color:var(--sub); margin:10px 0 4px; }
+  input, select { width:100%; padding:9px 11px; border:1px solid var(--borda); border-radius:8px; font-size:14px; }
+  input:focus, select:focus { outline:2px solid var(--azul2); border-color:var(--azul2); }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  button { background:var(--azul2); color:#fff; border:0; padding:10px 16px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-top:14px; }
+  button:hover { background:var(--azul); }
+  button.sec { background:#fff; color:var(--azul2); border:1px solid var(--azul2); }
+  button.sec:hover { background:#eff6ff; }
+  .msg { padding:10px 12px; border-radius:8px; font-size:13px; margin-top:12px; display:none; }
+  .msg.ok { background:#f0fdf4; color:var(--verde); border:1px solid #bbf7d0; display:block; }
+  .msg.err { background:#fef2f2; color:var(--vermelho); border:1px solid #fecaca; display:block; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--borda); font-size:13px; }
+  th { color:var(--sub); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+  .pill.on { background:#dcfce7; color:var(--verde); }
+  .hidden { display:none; }
+  .hint { font-size:12px; color:var(--sub); margin-top:6px; }
+  .toolbar { display:flex; gap:10px; align-items:center; }
+  .empty { color:var(--sub); font-style:italic; padding:16px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧾 NFS-e Nacional</h1>
+  <span class="who" id="who"></span>
+</header>
+<main>
+
+  <!-- LOGIN -->
+  <section class="card" id="cardLogin">
+    <h2>Entrar</h2>
+    <label>E-mail</label>
+    <input id="email" type="email" value="admin@example.com" autocomplete="username">
+    <label>Senha</label>
+    <input id="senha" type="password" value="senha123" autocomplete="current-password">
+    <button id="btnLogin">Entrar</button>
+    <div class="hint">Usuário de teste já criado: <b>admin@example.com</b> / <b>senha123</b></div>
+    <div class="msg" id="msgLogin"></div>
+  </section>
+
+  <!-- APP -->
+  <div id="app" class="hidden">
+    <section class="card">
+      <div class="toolbar" style="justify-content:space-between">
+        <h2 style="margin:0">Empresas</h2>
+        <div class="toolbar">
+          <button class="sec" id="btnReload" style="margin:0">↻ Atualizar</button>
+          <button class="sec" id="btnLogout" style="margin:0">Sair</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Razão social</th><th>CNPJ</th><th>Município (IBGE)</th><th>Regime</th><th>Sync</th><th>Ações</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="msg" id="msgRel"></div>
+      <div class="empty hidden" id="vazio">Nenhuma empresa cadastrada ainda.</div>
+    </section>
+
+    <section class="card">
+      <h2>Cadastrar empresa</h2>
+      <div class="row">
+        <div><label>CNPJ (14 dígitos)</label><input id="cnpj" placeholder="00.000.000/0000-00"></div>
+        <div><label>Razão social</label><input id="razao" placeholder="EMPRESA EXEMPLO LTDA"></div>
+      </div>
+      <div class="row">
+        <div><label>Inscrição municipal (opcional)</label><input id="im" placeholder="12345"></div>
+        <div><label>Município IBGE (7 dígitos, opcional)</label><input id="ibge" placeholder="2601607"></div>
+      </div>
+      <label>Regime tributário (opcional)</label>
+      <select id="regime">
+        <option value="">— não informar —</option>
+        <option value="simples">Simples Nacional</option>
+        <option value="presumido">Lucro Presumido</option>
+        <option value="real">Lucro Real</option>
+      </select>
+      <button id="btnCriar">Cadastrar</button>
+      <div class="msg" id="msgCriar"></div>
+    </section>
+  </div>
+
+</main>
+<script>
+let TOKEN = null;
+
+const $ = id => document.getElementById(id);
+function msg(el, texto, ok) { el.textContent = texto; el.className = "msg " + (ok ? "ok" : "err"); }
+
+async function api(caminho, opcoes = {}) {
+  opcoes.headers = Object.assign({ "Content-Type": "application/json" }, opcoes.headers || {});
+  if (TOKEN) opcoes.headers["Authorization"] = "Bearer " + TOKEN;
+  const r = await fetch(caminho, opcoes);
+  let corpo = null;
+  try { corpo = await r.json(); } catch (_) {}
+  if (!r.ok) {
+    const detalhe = corpo && corpo.detail ? (typeof corpo.detail === "string" ? corpo.detail : JSON.stringify(corpo.detail)) : ("HTTP " + r.status);
+    throw new Error(detalhe);
+  }
+  return corpo;
+}
+
+async function login() {
+  try {
+    const dados = await api("/auth/login", { method: "POST", body: JSON.stringify({ email: $("email").value, senha: $("senha").value }) });
+    TOKEN = dados.access_token;
+    $("cardLogin").classList.add("hidden");
+    $("app").classList.remove("hidden");
+    $("who").textContent = $("email").value;
+    await carregar();
+  } catch (e) { msg($("msgLogin"), "Falha no login: " + e.message, false); }
+}
+
+function logout() {
+  TOKEN = null;
+  $("app").classList.add("hidden");
+  $("cardLogin").classList.remove("hidden");
+  $("who").textContent = "";
+  $("msgLogin").className = "msg";
+}
+
+async function carregar() {
+  const lista = await api("/empresas");
+  const tb = $("tbody"); tb.innerHTML = "";
+  $("vazio").classList.toggle("hidden", lista.length > 0);
+  for (const e of lista) {
+    const tr = document.createElement("tr");
+    const cnpjFmt = e.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+    tr.innerHTML = `<td><b>${e.razao_social}</b></td><td>${cnpjFmt}</td><td>${e.municipio_ibge || "—"}</td>`
+      + `<td>${e.regime_tributario || "—"}</td><td><span class="pill on">ativo</span></td>`
+      + `<td style="white-space:nowrap">`
+      + `<button class="sec btn-rel" style="margin:0;padding:6px 10px" data-id="${e.id}" data-cnpj="${e.cnpj}">📊 Relatório</button> `
+      + `<button class="sec btn-zip" style="margin:0;padding:6px 10px" data-id="${e.id}" data-cnpj="${e.cnpj}">🗜️ Notas (ZIP)</button>`
+      + `</td>`;
+    tr.querySelector(".btn-rel").onclick = ev => baixarRelatorio(ev.target.dataset.id, ev.target.dataset.cnpj);
+    tr.querySelector(".btn-zip").onclick = ev => baixarZip(ev.target.dataset.id, ev.target.dataset.cnpj);
+    tb.appendChild(tr);
+  }
+}
+
+async function baixarRelatorio(id, cnpj) {
+  try {
+    const r = await fetch(`/empresas/${id}/relatorio`, { headers: { Authorization: "Bearer " + TOKEN } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `relacao_nfse_${cnpj}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    msg($("msgRel"), "Relatório 'Relação de NFS-e' gerado e baixado.", true);
+  } catch (e) { msg($("msgRel"), "Erro ao gerar relatório: " + e.message, false); }
+}
+
+async function baixarZip(id, cnpj) {
+  try {
+    const r = await fetch(`/empresas/${id}/notas.zip`, { headers: { Authorization: "Bearer " + TOKEN } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `notas_${cnpj}.zip`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    msg($("msgRel"), "ZIP com as notas gerado e baixado.", true);
+  } catch (e) { msg($("msgRel"), "Erro ao gerar ZIP: " + e.message, false); }
+}
+
+async function criar() {
+  const corpo = {
+    cnpj: $("cnpj").value,
+    razao_social: $("razao").value,
+    inscricao_municipal: $("im").value || null,
+    municipio_ibge: $("ibge").value || null,
+    regime_tributario: $("regime").value || null,
+  };
+  try {
+    await api("/empresas", { method: "POST", body: JSON.stringify(corpo) });
+    msg($("msgCriar"), "Empresa cadastrada com sucesso!", true);
+    $("cnpj").value = ""; $("razao").value = ""; $("im").value = ""; $("ibge").value = ""; $("regime").value = "";
+    await carregar();
+  } catch (e) { msg($("msgCriar"), "Erro: " + e.message, false); }
+}
+
+$("btnLogin").onclick = login;
+$("btnLogout").onclick = logout;
+$("btnReload").onclick = carregar;
+$("btnCriar").onclick = criar;
+$("senha").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+</script>
+</body>
+</html>
