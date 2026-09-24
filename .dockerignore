@@ -1,0 +1,30 @@
+# O que NUNCA entra numa imagem. Antes deste arquivo, `COPY . .` levava o .env
+# (todos os segredos), o .git inteiro e a planilha de um cliente para dentro dela.
+
+# Segredos e configuração local
+.env
+.env.*
+!.env.exemplo
+
+# Histórico e ferramentas
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+node_modules
+
+# Dados de cliente (planilha de referência, notas em PDF, saída da PoC)
+referencia
+*.pdf
+poc/out
+
+# Não roda em produção
+tests
+Makefile
+
+# registro da instalação (iniciar.sh / Iniciar.bat)
+instalacao.log
