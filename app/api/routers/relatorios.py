@@ -27,7 +27,7 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 def _serializavel(valor: Any) -> Any:
     if isinstance(valor, Decimal):
         return str(valor)
-    if isinstance(valor, (date, datetime)):
+    if isinstance(valor, date | datetime):
         return valor.isoformat()
     if isinstance(valor, uuid.UUID):
         return str(valor)
