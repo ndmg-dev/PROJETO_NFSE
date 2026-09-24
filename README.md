@@ -10,61 +10,72 @@ em autenticação ou sincronização.
 
 ## Como instalar
 
-Este repositório tem duas partes que se instalam em lugares diferentes, para
-públicos diferentes. Não existe um "instalador único" porque a arquitetura
-não é uma coisa só (§3.3-A): o backend roda num servidor; o agente roda na
-estação de cada contador.
+Sem digitar comando nenhum. São duas partes, em lugares diferentes, porque a
+arquitetura não é uma coisa só (spec §3.3-A): **um servidor** para o escritório
+e o **teste de certificado** em cada estação de contador.
 
-### Backend (API, banco, worker) — num servidor Linux com Docker
+### 1. O servidor (uma vez, em um computador que fique ligado)
 
-Requisitos: Docker e Docker Compose. Nada de Python, Postgres ou Redis
-instalado à parte — tudo roda em container.
+Precisa do **Docker**: no Windows, o [Docker Desktop](https://www.docker.com/products/docker-desktop/);
+no Linux/Mac, o Docker Engine.
+
+1. Baixe ou clone este repositório.
+2. **Windows:** dê duplo clique em **`Iniciar.bat`**.
+   **Linux/Mac:** dê duplo clique em (ou rode) **`iniciar.sh`**.
+3. O navegador abre sozinho no **assistente de primeiro acesso**. Digite o nome do
+   escritório, o seu e-mail e uma senha. Pronto.
+
+O instalador cria as senhas do sistema sozinho (ficam em `.env`, **guarde uma cópia
+em local seguro**), sobe o banco e a aplicação, aplica a estrutura do banco e abre
+o navegador já com o código de configuração preenchido. Pode rodar de novo quando
+quiser: não apaga nada nem troca senha existente. Se o Docker não estiver
+instalado ou aberto, ele explica o que fazer.
+
+Para acessar de outros computadores, use o endereço que o instalador mostra no fim
+(algo como `http://10.0.0.106:8000`).
+
+### 2. Cada estação de contador (Windows)
+
+1. No navegador da estação, abra **`http://ENDEREÇO-DO-SERVIDOR:8000/instalar`**.
+2. Clique em **Baixar o instalador** e abra o arquivo `Instalar-Agente-NFSe.bat`.
+3. Espere. Na primeira vez ele baixa uma cópia do Java (cerca de 200 MB, com
+   verificação de integridade), prepara tudo e abre a janela do teste.
+
+Não pede permissão de administrador e não precisa instalar Java antes.
+
+### O que ainda não é como você gostaria
+
+- **O agente completo não existe.** O que a estação instala hoje é a **ferramenta de
+  teste de certificado** (o spike): ela responde se o certificado A1 já instalado
+  pode ser usado sem exportá-lo. Quando o agente existir, o mesmo link o instalará.
+- **Os instaladores do Windows não foram executados num Windows.** Os testes rodam
+  em PowerShell 7 num container Linux e provam sintaxe, o formato dos arquivos e a
+  lógica pura. **Não provam** o Windows PowerShell 5.1, o Docker Desktop, o javac, o
+  atalho na Área de Trabalho nem o `SunMSCAPI`. A estrutura do zip real do Java e o
+  módulo `jdk.crypto.mscapi` foram conferidos baixando o arquivo de verdade.
+- **O instalador da estação não tem assinatura digital.** O Windows vai avisar que
+  o arquivo é desconhecido (o `/instalar` explica o que clicar); antivírus mais
+  rígidos podem bloqueá-lo.
+- **O acesso é por HTTP, sem criptografia.** Numa rede interna de confiança é
+  aceitável para começar, mas a senha do administrador e o arquivo do instalador
+  trafegam em claro. **Antes de abrir para fora da rede do escritório, coloque HTTPS
+  na frente** (um proxy reverso com certificado).
+- **Precisa de Docker no servidor.** Num Windows isso significa o Docker Desktop
+  rodando; se a máquina desligar, o sistema cai até ela voltar.
+
+### Para quem desenvolve
+
+O `docker-compose.yml` é o de desenvolvimento (monta o código do disco). O de
+instalação é o `docker-compose.instalacao.yml`, usado só pelos instaladores.
 
 ```bash
-git clone https://github.com/ndmg-dev/PROJETO_NFSE.git
-cd PROJETO_NFSE
-cp .env.exemplo .env
+cp .env.exemplo .env      # ou rode iniciar.sh uma vez, que cria o .env
+make up && make migrate
+make test                 # testes Python, contra Postgres real
+make test-web             # páginas HTML em jsdom (Node, via Docker)
+make test-windows         # instaladores do Windows em PowerShell 7 (via Docker)
+make lint types reversivel
 ```
-
-Abra o `.env` e gere os dois segredos pedidos (a senha do Postgres pode ser
-qualquer texto forte; o `JWT_SECRET` precisa dos 32 bytes em base64):
-
-```bash
-python3 -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
-```
-
-Depois:
-
-```bash
-make up          # sobe Postgres e Redis
-make migrate     # aplica o schema
-make test        # 373 testes — confirma que a instalação está íntegra
-```
-
-Se `make` não existir na máquina, os comandos equivalentes estão no
-[Makefile](Makefile) — são só chamadas de `docker compose`.
-
-**Este backend ainda não emite nem consulta nada no ADN.** A Fase 0 (prova de
-conceito) está bloqueada por falta de certificado — ver mais abaixo.
-
-### Agente (spike) — na estação Windows do contador
-
-Esta parte não usa Docker nem o restante do repositório. É um teste isolado
-para validar se dá para usar o certificado A1 que já está instalado na
-estação, sem exportá-lo.
-
-1. Instale o JDK 21 (Temurin):
-   `https://adoptium.net/temurin/releases/?version=21` — marque **"Add to
-   PATH"** durante a instalação.
-2. Copie a pasta [agente/spike/](agente/spike/) para a estação Windows
-   (pendrive, e-mail, o que for mais simples — não precisa clonar o
-   repositório inteiro ali).
-3. Dê duplo clique em **`testar.bat`**.
-
-O `.bat` confere se o Java está instalado, compila os arquivos e abre uma
-janela com dois botões: ver os certificados da máquina e testar uma conexão
-usando um deles. Detalhes, o que esperar na tela e o que fazer se der erro
-estão em [agente/README.md](agente/README.md).
 
 ## Estado
 
@@ -76,17 +87,12 @@ estão em [agente/README.md](agente/README.md).
 | 1 — relatório com paridade de portal | pronta |
 | 1 — relatório de retenções e divergências de líquido | pronto; com dado real, depende do contrato do ADN |
 | 1 — parser, sincronização e projeção para `nfse` (mecânica) | pronta; contrato do ADN pendente |
+| 1 — instalação: assistente de primeiro acesso, instalador do servidor e da estação | pronta; instaladores do Windows não executados num Windows |
 | 1 — agente local (Java + `SunMSCAPI`) | **spike**, não verificado — precisa de estação Windows |
 | 2, 3 | não iniciadas |
 
-373 testes Python. Tudo roda em container.
+431 testes Python. Tudo roda em container.
 
-```bash
-cp .env.exemplo .env      # preencha os segredos
-make up && make migrate
-make test                 # 373 testes
-make lint types reversivel
-```
 
 ## Mudança de arquitetura (22/09/2026)
 
