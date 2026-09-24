@@ -1,0 +1,15 @@
+# Conjunto mínimo para a instalação local no Windows (sem Docker, sem Celery, sem Redis).
+# A API só precisa disto; o que é de worker (celery, redis) e de desenvolvimento
+# (pytest, ruff, mypy, respx) fica de fora. O instalador usa o requirements-local.lock,
+# que é DESTE arquivo resolvido para Windows, com hash de cada wheel.
+fastapi==0.115.0
+uvicorn==0.30.6
+sqlalchemy==2.0.35
+alembic==1.13.3
+psycopg[binary]==3.2.3
+pydantic==2.9.2
+pydantic-settings==2.5.2
+email-validator==2.2.0
+httpx==0.27.2
+bcrypt==4.2.0
+openpyxl==3.1.5

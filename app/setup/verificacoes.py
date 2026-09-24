@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-import redis
 from sqlalchemy import text
 
 from app.core.config import obter_config
@@ -64,9 +63,11 @@ def _esquema() -> Verificacao:
     return Verificacao("esquema", "Estrutura do banco", True)
 
 
-def _redis() -> Verificacao:
+def _redis(url: str) -> Verificacao:
     try:
-        redis.from_url(obter_config().redis_url, socket_connect_timeout=2).ping()
+        import redis  # sob demanda: a instalação local nem tem o pacote
+
+        redis.from_url(url, socket_connect_timeout=2).ping()
     except Exception:
         return Verificacao("redis", "Fila de tarefas", False,
                            "Não foi possível conectar à fila de tarefas.")
@@ -81,4 +82,8 @@ def verificar_sistema() -> list[Verificacao]:
         else Verificacao("esquema", "Estrutura do banco", False,
                          "Aguardando o banco de dados.")
     )
-    return [banco, esquema, _redis()]
+    verificacoes = [banco, esquema]
+    url_redis = obter_config().redis_url
+    if url_redis:  # sem Redis configurado (instalação local), não há o que conferir
+        verificacoes.append(_redis(url_redis))
+    return verificacoes

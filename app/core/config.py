@@ -13,7 +13,9 @@ class Config(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = Field(alias="DATABASE_URL")
-    redis_url: str = Field(alias="REDIS_URL")
+    # Opcional: a instalação local (Windows, sem Docker) não tem Redis. Só os
+    # workers Celery precisam dele; a API não.
+    redis_url: str | None = Field(default=None, alias="REDIS_URL")
 
     # SecretStr para não vazar em repr/log/traceback — a §8 proíbe.
     # COFRE_MASTER_KEY removida (spec §3.3-A, 22/09/2026): sem cofre central,

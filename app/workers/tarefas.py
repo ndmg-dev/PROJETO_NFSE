@@ -41,7 +41,10 @@ def lock_de_empresa(empresa_id: UUID) -> Iterator[bool]:
     valendo no modelo sob demanda: dois cliques do mesmo contador, ou dois
     contadores da mesma empresa, não podem sincronizar ao mesmo tempo.
     """
-    cliente = redis.from_url(obter_config().redis_url)
+    url = obter_config().redis_url
+    if not url:
+        raise RuntimeError("REDIS_URL não configurada: os workers precisam do Redis")
+    cliente = redis.from_url(url)
     chave = f"sync:{empresa_id}"
     obtido = bool(cliente.set(chave, "1", nx=True, ex=TTL_LOCK_S))
     try:
