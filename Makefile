@@ -9,7 +9,7 @@ APP   = -e DATABASE_URL="postgresql+psycopg://nfse_app:$(APW)@db:5432/nfse" \
         -e REDIS_URL="redis://redis:6379/0"
 RUN   = docker compose run --rm
 
-.PHONY: up down build migrate test test-web test-windows lint types reversivel
+.PHONY: up down build migrate test test-web test-windows test-local lint types reversivel
 up:      ; docker compose up -d db redis
 down:    ; docker compose down
 build:   ; docker compose build
@@ -25,6 +25,10 @@ test-windows:
 	mkdir -p .tmp-windows
 	$(RUN) --no-deps --user "$$(id -u):$$(id -g)" api python -m app.instalador.agente --url http://servidor-de-teste:8000 --saida /app/.tmp-windows/Instalar-Agente-NFSe.bat
 	docker run --rm -v "$(CURDIR)":/work:ro -w /work mcr.microsoft.com/powershell:latest pwsh -NoProfile -File tests/windows/todos.ps1
+# Ensaio da instalação local (sem Docker) no Linux, com os mesmos binários de
+# PostgreSQL 16.15.0. Prova a sequência e o modo local da aplicação; NAO prova nada
+# especifico do Windows. Roda como usuario comum (o PostgreSQL recusa root).
+test-local: ; docker run --rm -v "$(CURDIR)":/repo:ro python:3.12-slim sh -c "useradd -m ensaio && su ensaio -c 'REPO=/repo python /repo/tests/local/ensaio_linux.py'"
 lint:    ; $(RUN) --no-deps api ruff check app poc tests
 types:   ; $(RUN) --no-deps api mypy app/domain/ app/adn/ app/core/dinheiro.py
 reversivel: ; $(RUN) $(ADMIN) api sh -c "alembic downgrade base && alembic upgrade head"
