@@ -1,0 +1,6 @@
+# Scripts do Windows precisam de CRLF (o cmd falha com LF em rótulos e goto);
+# scripts de shell precisam de LF. Sem isto, um clone no Windows pode quebrar
+# o instalador.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.sh  text eol=lf
