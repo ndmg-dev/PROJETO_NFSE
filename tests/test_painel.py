@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 
 WEB = Path(__file__).resolve().parents[1] / "app" / "web"
 INDEX = WEB / "index.html"
-PAGINAS = [WEB / "index.html", WEB / "setup.html"]
+PAGINAS = [WEB / "index.html", WEB / "setup.html", WEB / "instalar.html"]
 
 
 def test_painel_e_servido_na_raiz() -> None:

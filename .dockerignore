@@ -28,3 +28,6 @@ Makefile
 
 # registro da instalação (iniciar.sh / Iniciar.bat)
 instalacao.log
+
+# gerado por make test-windows
+.tmp-windows

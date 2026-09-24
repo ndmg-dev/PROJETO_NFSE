@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NFS-e Nacional — Instalar nesta estação</title>
+<style>
+  :root { --azul:#1e40af; --azul2:#2563eb; --cinza:#f1f5f9; --borda:#e2e8f0; --txt:#0f172a; --sub:#64748b; --amarelo:#fef9c3; --amarelo-b:#fde047; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.6 system-ui,Segoe UI,Roboto,sans-serif; color:var(--txt); background:var(--cinza); }
+  header { background:var(--azul); color:#fff; padding:16px 24px; }
+  header h1 { font-size:18px; margin:0; font-weight:600; }
+  main { max-width:680px; margin:28px auto; padding:0 16px; }
+  .card { background:#fff; border:1px solid var(--borda); border-radius:12px; padding:22px; margin-bottom:18px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .card h2 { margin:0 0 8px; font-size:16px; }
+  .sub { color:var(--sub); font-size:13px; margin:0 0 12px; }
+  .botao { display:inline-block; background:var(--azul2); color:#fff; padding:14px 22px; border-radius:10px; font-size:16px; font-weight:600; text-decoration:none; margin-top:6px; }
+  .botao:hover { background:var(--azul); }
+  ol { padding-left:22px; margin:8px 0 0; } li { margin:9px 0; }
+  .aviso { background:var(--amarelo); border:1px solid var(--amarelo-b); border-radius:10px; padding:12px 14px; font-size:14px; margin-top:12px; }
+  .hidden { display:none; }
+  code { background:#f1f5f9; padding:1px 6px; border-radius:5px; font-size:13px; }
+</style>
+</head>
+<body>
+<header><h1>🧾 NFS-e Nacional — instalar nesta estação</h1></header>
+<main>
+
+  <section class="card">
+    <h2>Instalar a ferramenta de teste de certificado</h2>
+    <p class="sub">Para computadores Windows. Não precisa digitar comandos nem instalar nada antes.</p>
+    <div class="aviso hidden" id="avisoOutroSistema">
+      Este computador não parece ser Windows. A ferramenta usa o repositório de certificados do
+      Windows, então só funciona nele. Abra este mesmo endereço em um computador Windows.
+    </div>
+    <a class="botao" id="baixar" href="/instalar/Instalar-Agente-NFSe.bat" download>⬇ Baixar o instalador</a>
+    <p class="sub" style="margin-top:12px">Este computador vai se conectar a <b id="endereco"></b>.</p>
+  </section>
+
+  <section class="card">
+    <h2>Passo a passo</h2>
+    <ol>
+      <li>Clique em <b>Baixar o instalador</b> e abra o arquivo <code>Instalar-Agente-NFSe.bat</code>.</li>
+      <li>O Windows pode avisar que o arquivo não é comum ou que é desconhecido, porque ele ainda não tem
+          assinatura digital. Clique em <b>Manter</b> no navegador e, se aparecer,
+          em <b>Mais informações → Executar assim mesmo</b>.</li>
+      <li>Espere. Na primeira vez ele baixa uma cópia do Java (cerca de 200 MB), prepara tudo e cria um
+          atalho na Área de Trabalho.</li>
+      <li>Na janela que abrir, clique em <b>Ver certificados desta máquina</b> e depois em
+          <b>Testar conexão com um certificado</b>. Envie o resultado para quem administra o sistema.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>O que isto faz, e o que ainda não</h2>
+    <p class="sub" style="margin:0 0 8px">Sem surpresas:</p>
+    <ul style="margin:0; padding-left:22px">
+      <li>Instala só para o seu usuário, em <code>%LOCALAPPDATA%\nfse-agente</code>. Não pede
+          permissão de administrador.</li>
+      <li>Verifica se o certificado A1 já instalado neste computador pode ser usado <b>sem exportá-lo</b>.
+          Não copia nem envia o certificado para lugar nenhum.</li>
+      <li>É uma <b>versão de validação</b>. O agente completo, que sincroniza as notas, ainda está em
+          desenvolvimento e será instalado por este mesmo link.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Se algo não funcionar</h2>
+    <ul style="margin:0; padding-left:22px">
+      <li><b>O download do Java falhou:</b> a rede do escritório pode estar bloqueando
+          <code>api.adoptium.net</code> ou <code>github.com</code>. Peça a quem cuida da rede para liberar.</li>
+      <li><b>O antivírus bloqueou o arquivo:</b> ele é um script sem assinatura digital. Peça a quem
+          administra o sistema para liberá-lo.</li>
+      <li><b>A janela fechou sozinha:</b> abra o atalho <i>Teste de certificado NFS-e</i> na Área de Trabalho.</li>
+    </ul>
+  </section>
+
+</main>
+<script>
+document.getElementById("endereco").textContent = location.origin;
+if (!/Windows/i.test(navigator.userAgent)) {
+  document.getElementById("avisoOutroSistema").classList.remove("hidden");
+}
+</script>
+</body>
+</html>

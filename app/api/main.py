@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
-from app.api.routers import auth, empresas, relatorios, setup
+from app.api.routers import auth, empresas, instalar, relatorios, setup
 from app.core.config import obter_config
 from app.setup.codigo import codigo_de_configuracao
 from app.setup.verificacoes import setup_concluido
@@ -29,6 +29,7 @@ async def _ciclo_de_vida(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="NFS-e Nacional", version="0.1.0", lifespan=_ciclo_de_vida)
 app.include_router(setup.router)
+app.include_router(instalar.router)
 app.include_router(auth.router)
 app.include_router(empresas.router)
 app.include_router(relatorios.router)
@@ -48,6 +49,12 @@ def painel() -> Response:
 @app.get("/setup", include_in_schema=False)
 def assistente() -> FileResponse:
     return FileResponse(_WEB / "setup.html")
+
+
+@app.get("/instalar", include_in_schema=False)
+def pagina_de_instalacao() -> FileResponse:
+    """Página para as estações dos contadores: um link, um arquivo, duplo clique."""
+    return FileResponse(_WEB / "instalar.html")
 
 
 @app.exception_handler(Exception)
