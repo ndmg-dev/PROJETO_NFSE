@@ -38,7 +38,7 @@ Depois:
 ```bash
 make up          # sobe Postgres e Redis
 make migrate     # aplica o schema
-make test        # 250 testes — confirma que a instalação está íntegra
+make test        # 283 testes — confirma que a instalação está íntegra
 ```
 
 Se `make` não existir na máquina, os comandos equivalentes estão no
@@ -78,12 +78,12 @@ estão em [agente/README.md](agente/README.md).
 | 1 — agente local (Java + `SunMSCAPI`) | **spike**, não verificado — precisa de estação Windows |
 | 2, 3 | não iniciadas |
 
-250 testes Python. Tudo roda em container.
+283 testes Python. Tudo roda em container.
 
 ```bash
 cp .env.exemplo .env      # preencha os segredos
 make up && make migrate
-make test                 # 250 testes
+make test                 # 283 testes
 make lint types reversivel
 ```
 
