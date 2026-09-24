@@ -20,6 +20,7 @@ from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
+from app.core.planilha import forcar_texto_literal
 from app.domain.layout_relacao import COLUNAS_RELACAO, ORIGEM_NO_MODELO
 from app.domain.resumo import calcular_resumo
 
@@ -81,6 +82,9 @@ def _escrever_relacao(aba: Worksheet, notas: Sequence[Any]) -> None:
 
     for nota in notas:
         aba.append(montar_linha(nota))
+        # Nome, descrição e informações vêm do XML do fornecedor. Uma string
+        # iniciada por "=" viraria fórmula no Excel do contador.
+        forcar_texto_literal(aba[aba.max_row])
 
     for indice, coluna in enumerate(COLUNAS_RELACAO, start=1):
         letra = get_column_letter(indice)

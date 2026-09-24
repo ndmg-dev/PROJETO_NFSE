@@ -12,10 +12,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import String, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import sessao
+from app.core.planilha import neutralizar_formula
 from app.db.models import Empresa, Nfse
 from app.reports.relacao_nfse import gerar_relacao
 
@@ -39,6 +40,22 @@ def _nota_dict(nota: Nfse) -> dict[str, Any]:
         c.name: _serializavel(getattr(nota, c.name))
         for c in Nfse.__table__.columns
     }
+
+
+def _nota_csv(nota: Nfse) -> dict[str, Any]:
+    """Como _nota_dict, mas com o texto livre neutralizado contra fórmula.
+
+    Só as colunas de texto: os números saem de Decimal e prefixá-los
+    corromperia valores negativos.
+    """
+    linha: dict[str, Any] = {}
+    for c in Nfse.__table__.columns:
+        valor = getattr(nota, c.name)
+        if isinstance(c.type, String) and isinstance(valor, str):
+            linha[c.name] = neutralizar_formula(valor)
+        else:
+            linha[c.name] = _serializavel(valor)
+    return linha
 
 
 @router.get("/{empresa_id}/relatorio")
@@ -99,7 +116,7 @@ def notas_zip(
             escritor = csv.DictWriter(texto, fieldnames=colunas)
             escritor.writeheader()
             for nota in notas:
-                escritor.writerow(_nota_dict(nota))
+                escritor.writerow(_nota_csv(nota))
             zip_.writestr("notas.csv", texto.getvalue())
         else:
             zip_.writestr("LEIAME.txt", "Nenhuma nota cadastrada para esta empresa.\n")
