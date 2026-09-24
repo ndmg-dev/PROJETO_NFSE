@@ -1,1 +1,212 @@
-<!doctype html><title>setup</title>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NFS-e Nacional — Primeiro acesso</title>
+<style>
+  :root { --azul:#1e40af; --azul2:#2563eb; --cinza:#f1f5f9; --borda:#e2e8f0; --txt:#0f172a; --sub:#64748b; --verde:#16a34a; --vermelho:#dc2626; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.55 system-ui,Segoe UI,Roboto,sans-serif; color:var(--txt); background:var(--cinza); }
+  header { background:var(--azul); color:#fff; padding:16px 24px; }
+  header h1 { font-size:18px; margin:0; font-weight:600; }
+  main { max-width:620px; margin:28px auto; padding:0 16px; }
+  .card { background:#fff; border:1px solid var(--borda); border-radius:12px; padding:22px; margin-bottom:18px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .card h2 { margin:0 0 6px; font-size:16px; }
+  .passo { display:inline-block; background:var(--azul2); color:#fff; border-radius:999px; width:24px; height:24px; text-align:center; line-height:24px; font-size:13px; margin-right:8px; }
+  .sub { color:var(--sub); font-size:13px; margin:0 0 14px; }
+  label { display:block; font-size:13px; color:var(--sub); margin:14px 0 4px; }
+  input { width:100%; padding:10px 12px; border:1px solid var(--borda); border-radius:8px; font-size:15px; }
+  input:focus { outline:2px solid var(--azul2); border-color:var(--azul2); }
+  button, .botao { display:inline-block; background:var(--azul2); color:#fff; border:0; padding:11px 18px; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; margin-top:18px; text-decoration:none; }
+  button:hover, .botao:hover { background:var(--azul); }
+  button:disabled { background:#94a3b8; cursor:not-allowed; }
+  button.sec, .botao.sec { background:#fff; color:var(--azul2); border:1px solid var(--azul2); }
+  ul.verificacoes { list-style:none; margin:10px 0 0; padding:0; }
+  ul.verificacoes li { display:flex; gap:10px; padding:7px 0; border-bottom:1px solid var(--borda); }
+  ul.verificacoes li:last-child { border-bottom:0; }
+  .ok { color:var(--verde); font-weight:700; } .falha { color:var(--vermelho); font-weight:700; } .espera { color:var(--sub); }
+  .msg { padding:10px 12px; border-radius:8px; font-size:14px; margin-top:14px; display:none; }
+  .msg.err { background:#fef2f2; color:var(--vermelho); border:1px solid #fecaca; display:block; }
+  .msg.info { background:#eff6ff; color:var(--azul); border:1px solid #bfdbfe; display:block; }
+  .dica { font-size:12px; color:var(--sub); margin-top:5px; }
+  .hidden { display:none; }
+  .acoes { display:flex; gap:12px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<header><h1>🧾 NFS-e Nacional — primeiro acesso</h1></header>
+<main>
+
+  <section class="card">
+    <h2>Vamos deixar o sistema pronto</h2>
+    <p class="sub" style="margin:0">Leva menos de um minuto: conferimos se está tudo no lugar e você cria o
+    escritório e a conta de administrador. Não precisa digitar nenhum comando.</p>
+  </section>
+
+  <section class="card" id="cardVerificacao">
+    <h2><span class="passo">1</span>Conferindo o sistema</h2>
+    <ul class="verificacoes" id="listaVerificacoes"><li class="espera">Verificando…</li></ul>
+    <div class="msg" id="msgVerificacao"></div>
+    <button class="sec hidden" id="btnVerificar">Verificar novamente</button>
+  </section>
+
+  <section class="card hidden" id="cardJaConfigurado">
+    <h2>O sistema já está configurado</h2>
+    <p class="sub">Esta etapa só existe no primeiro acesso. Entre com a conta de administrador.</p>
+    <a class="botao" href="/">Entrar no painel</a>
+  </section>
+
+  <section class="card hidden" id="cardForm">
+    <h2><span class="passo">2</span>Crie o escritório e o administrador</h2>
+    <p class="sub">Esta conta poderá cadastrar empresas e outros usuários.</p>
+
+    <label for="escritorio">Nome do escritório</label>
+    <input id="escritorio" autocomplete="organization" placeholder="Ex.: Mendonça Galvão Contabilidade">
+
+    <label for="email">E-mail do administrador</label>
+    <input id="email" type="email" autocomplete="username" placeholder="voce@seuescritorio.com.br">
+
+    <label for="senha">Senha (mínimo 10 caracteres)</label>
+    <input id="senha" type="password" autocomplete="new-password">
+    <div class="dica" id="dicaSenha"></div>
+
+    <label for="senha2">Repita a senha</label>
+    <input id="senha2" type="password" autocomplete="new-password">
+
+    <label for="codigo">Código de configuração</label>
+    <input id="codigo" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX">
+    <div class="dica" id="dicaCodigo"></div>
+
+    <button id="btnCriar">Criar e concluir</button>
+    <div class="msg" id="msgCriar"></div>
+  </section>
+
+  <section class="card hidden" id="cardPronto">
+    <h2><span class="passo">✓</span>Tudo pronto!</h2>
+    <p class="sub">O escritório e a conta de administrador foram criados. Anote o e-mail que você usou
+    para entrar.</p>
+    <div class="acoes">
+      <a class="botao" href="/">Entrar no painel</a>
+      <a class="botao sec" href="/instalar">Instalar nas estações de trabalho</a>
+    </div>
+  </section>
+
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const SENHA_MIN = 10;
+
+function texto(el, valor) { el.textContent = valor; }
+function mostrar(el, classe, mensagem) { el.className = "msg " + classe; texto(el, mensagem); }
+function esconder(el) { el.className = "msg"; texto(el, ""); }
+
+// O código pode chegar na URL (o instalador abre o link já com ele). Some da
+// barra de endereço e do histórico assim que é lido.
+const codigoDaUrl = new URLSearchParams(location.search).get("codigo") || "";
+if (codigoDaUrl) { history.replaceState(null, "", location.pathname); }
+$("codigo").value = codigoDaUrl;
+texto($("dicaCodigo"), codigoDaUrl
+  ? "Recebido automaticamente."
+  : "Aparece no log do servidor (\"Código de configuração\"). Quem instalou o sistema tem acesso a ele.");
+
+function desenharVerificacoes(lista) {
+  const ul = $("listaVerificacoes");
+  ul.replaceChildren();
+  for (const v of lista) {
+    const li = document.createElement("li");
+    const marca = document.createElement("span");
+    marca.className = v.ok ? "ok" : "falha";
+    texto(marca, v.ok ? "✓" : "✗");
+    const rotulo = document.createElement("span");
+    texto(rotulo, v.rotulo + (v.ok || !v.detalhe ? "" : " — " + v.detalhe));
+    li.append(marca, rotulo);
+    ul.appendChild(li);
+  }
+}
+
+async function verificar() {
+  esconder($("msgVerificacao"));
+  $("btnVerificar").classList.add("hidden");
+  let estado;
+  try {
+    const r = await fetch("/setup/status");
+    estado = await r.json();
+  } catch (_) {
+    desenharVerificacoes([]);
+    mostrar($("msgVerificacao"), "err", "Não foi possível falar com o servidor. Confira se ele está ligado e tente de novo.");
+    $("btnVerificar").classList.remove("hidden");
+    return;
+  }
+
+  if (estado.configurado === true) {
+    $("cardVerificacao").classList.add("hidden");
+    $("cardForm").classList.add("hidden");
+    $("cardJaConfigurado").classList.remove("hidden");
+    return;
+  }
+
+  desenharVerificacoes(estado.verificacoes || []);
+  const tudoOk = (estado.verificacoes || []).length > 0 && estado.verificacoes.every(v => v.ok);
+  $("cardForm").classList.toggle("hidden", !tudoOk);
+  if (!tudoOk) {
+    mostrar($("msgVerificacao"), "err",
+      "Algo ainda não está pronto. Se o servidor acabou de ligar, espere alguns segundos e verifique de novo.");
+    $("btnVerificar").classList.remove("hidden");
+  }
+}
+
+$("senha").addEventListener("input", () => {
+  const falta = SENHA_MIN - $("senha").value.length;
+  texto($("dicaSenha"), falta > 0 ? "Faltam " + falta + " caractere(s)." : "");
+});
+
+async function criar() {
+  esconder($("msgCriar"));
+  const escritorio = $("escritorio").value.trim();
+  const email = $("email").value.trim();
+  const senha = $("senha").value;
+
+  if (escritorio.length < 2) return mostrar($("msgCriar"), "err", "Informe o nome do escritório.");
+  if (!email || !$("email").checkValidity()) return mostrar($("msgCriar"), "err", "Informe um e-mail válido.");
+  if (senha.length < SENHA_MIN) return mostrar($("msgCriar"), "err", "A senha precisa ter pelo menos " + SENHA_MIN + " caracteres.");
+  if (senha !== $("senha2").value) return mostrar($("msgCriar"), "err", "As duas senhas não são iguais.");
+  if (!$("codigo").value.trim()) return mostrar($("msgCriar"), "err", "Informe o código de configuração.");
+
+  $("btnCriar").disabled = true;
+  try {
+    const r = await fetch("/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ codigo: $("codigo").value, escritorio, email, senha }),
+    });
+    if (r.status === 201) {
+      $("cardForm").classList.add("hidden");
+      $("cardVerificacao").classList.add("hidden");
+      $("cardPronto").classList.remove("hidden");
+      return;
+    }
+    const explicacoes = {
+      403: "Código de configuração incorreto.",
+      409: "O sistema já foi configurado por outra pessoa. Recarregue a página.",
+      429: "Muitas tentativas com código incorreto. Aguarde alguns minutos.",
+      422: "Confira os campos: e-mail válido e senha com pelo menos " + SENHA_MIN + " caracteres.",
+      503: "Não foi possível concluir. Verifique o banco de dados e tente de novo.",
+    };
+    mostrar($("msgCriar"), "err", explicacoes[r.status] || "Não foi possível concluir (erro " + r.status + ").");
+  } catch (_) {
+    mostrar($("msgCriar"), "err", "Não foi possível falar com o servidor.");
+  } finally {
+    $("btnCriar").disabled = false;
+  }
+}
+
+$("btnVerificar").onclick = verificar;
+$("btnCriar").onclick = criar;
+for (const id of ["escritorio", "email", "senha", "senha2", "codigo"]) {
+  $(id).addEventListener("keydown", e => { if (e.key === "Enter") criar(); });
+}
+verificar();
+</script>
+</body>
+</html>

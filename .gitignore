@@ -24,3 +24,6 @@ poc/out/
 # CNPJ). O repositório é público: nunca versionar. Para teste, usar XML
 # anonimizado (spec §10).
 /*.pdf
+
+# jsdom das verificações de tests/web
+node_modules/

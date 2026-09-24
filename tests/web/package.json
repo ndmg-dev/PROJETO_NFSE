@@ -1,0 +1,6 @@
+{
+  "name": "nfse-testes-web",
+  "private": true,
+  "description": "Verificação das páginas HTML em jsdom. Não faz parte do make test: exige Node (via Docker) e rede para o npm.",
+  "dependencies": { "jsdom": "^25.0.0" }
+}

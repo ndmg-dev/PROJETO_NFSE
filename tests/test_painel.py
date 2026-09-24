@@ -14,9 +14,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
-INDEX = Path(__file__).resolve().parents[1] / "app" / "web" / "index.html"
+WEB = Path(__file__).resolve().parents[1] / "app" / "web"
+INDEX = WEB / "index.html"
+PAGINAS = [WEB / "index.html", WEB / "setup.html"]
 
 
 def test_painel_e_servido_na_raiz() -> None:
@@ -27,8 +30,9 @@ def test_painel_e_servido_na_raiz() -> None:
     assert "text/html" in r.headers["content-type"]
 
 
-def test_painel_nao_monta_html_a_partir_de_dados() -> None:
-    js = INDEX.read_text(encoding="utf-8")
+@pytest.mark.parametrize("pagina", PAGINAS, ids=lambda p: p.name)
+def test_pagina_nao_monta_html_a_partir_de_dados(pagina: Path) -> None:
+    js = pagina.read_text(encoding="utf-8")
 
     atribuicoes = re.findall(r"innerHTML\s*=\s*([^;\n]+)", js)
     nao_vazias = [a.strip() for a in atribuicoes if a.strip() not in {'""', "''"}]
@@ -38,3 +42,12 @@ def test_painel_nao_monta_html_a_partir_de_dados() -> None:
 
     for api_perigosa in ("insertAdjacentHTML", "outerHTML", "document.write"):
         assert api_perigosa not in js, f"{api_perigosa} monta HTML a partir de string"
+
+
+def test_login_do_painel_nao_traz_credenciais_prontas() -> None:
+    """Sobrou do PR do painel: e-mail e senha de teste pré-preenchidos, e uma
+    dica anunciando-os. Com o assistente de primeiro acesso esse usuário não
+    existe, e anunciar senha padrão é risco."""
+    html = INDEX.read_text(encoding="utf-8")
+    assert "senha123" not in html
+    assert "admin@example.com" not in html
