@@ -65,6 +65,14 @@
           <button class="sec" id="btnLogout" style="margin:0">Sair</button>
         </div>
       </div>
+      <div class="toolbar" style="margin:10px 0;gap:14px;align-items:center;flex-wrap:wrap">
+        <strong>Relatório de retenções:</strong>
+        <span>de <input id="retDe" type="month" style="width:auto"></span>
+        <span>até <input id="retAte" type="month" style="width:auto"></span>
+        <label style="display:inline-flex;gap:6px;align-items:center;margin:0">
+          <input id="retDiv" type="checkbox" style="width:auto"> só notas com divergência
+        </label>
+      </div>
       <table>
         <thead><tr><th>Razão social</th><th>CNPJ</th><th>Município (IBGE)</th><th>Regime</th><th>Sync</th><th>Ações</th></tr></thead>
         <tbody id="tbody"></tbody>
@@ -183,6 +191,8 @@ async function carregar() {
     tdAcoes.appendChild(botao("📊 Relatório", () => baixarRelatorio(e.id, e.cnpj)));
     tdAcoes.appendChild(document.createTextNode(" "));
     tdAcoes.appendChild(botao("🗜️ Notas (ZIP)", () => baixarZip(e.id, e.cnpj)));
+    tdAcoes.appendChild(document.createTextNode(" "));
+    tdAcoes.appendChild(botao("💰 Retenções", () => baixarRetencoes(e.id, e.cnpj)));
     tr.appendChild(tdAcoes);
 
     tb.appendChild(tr);
@@ -215,6 +225,27 @@ async function baixarZip(id, cnpj) {
     URL.revokeObjectURL(url);
     msg($("msgRel"), "ZIP com as notas gerado e baixado.", true);
   } catch (e) { msg($("msgRel"), "Erro ao gerar ZIP: " + e.message, false); }
+}
+
+async function baixarRetencoes(id, cnpj) {
+  const filtros = new URLSearchParams();
+  if ($("retDe").value) filtros.set("competencia_de", $("retDe").value);
+  if ($("retAte").value) filtros.set("competencia_ate", $("retAte").value);
+  if ($("retDiv").checked) filtros.set("somente_divergentes", "true");
+  const consulta = filtros.toString();
+  try {
+    const r = await fetch(`/empresas/${id}/retencoes` + (consulta ? "?" + consulta : ""),
+      { headers: { Authorization: "Bearer " + TOKEN } });
+    if (r.status === 422) throw new Error("filtro inválido: a competência inicial não pode ser posterior à final");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `retencoes_${cnpj}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    msg($("msgRel"), "Relatório de retenções e divergências gerado e baixado.", true);
+  } catch (e) { msg($("msgRel"), "Erro ao gerar o relatório de retenções: " + e.message, false); }
 }
 
 async function criar() {
