@@ -8,17 +8,18 @@ import zipfile
 from datetime import date, datetime
 from decimal import Decimal
 from io import BytesIO
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import String, select
+from sqlalchemy import String, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import sessao
 from app.core.planilha import neutralizar_formula
 from app.db.models import Empresa, Nfse
 from app.reports.relacao_nfse import gerar_relacao
+from app.reports.retencoes import gerar_relatorio_retencoes
 
 router = APIRouter(prefix="/empresas", tags=["relatorios"])
 
@@ -126,5 +127,86 @@ def notas_zip(
     return StreamingResponse(
         buffer,
         media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'},
+    )
+
+
+Competencia = Annotated[
+    str | None,
+    Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="AAAA-MM", examples=["2026-08"]),
+]
+
+
+def _primeiro_dia(competencia: str) -> date:
+    ano, mes = competencia.split("-")
+    return date(int(ano), int(mes), 1)
+
+
+@router.get("/{empresa_id}/retencoes")
+def retencoes(
+    empresa_id: uuid.UUID,
+    competencia_de: Competencia = None,
+    competencia_ate: Competencia = None,
+    papel: Literal["prestador", "tomador"] | None = None,
+    situacao: Annotated[list[Literal["Normal", "Cancelada", "Substituída"]] | None, Query()] = None,
+    somente_divergentes: bool = False,
+    s: Session = Depends(sessao),
+) -> StreamingResponse:
+    """Relatório de Retenções e Divergências de líquido (XLSX).
+
+    Mostra, por nota, as retenções destacadas e compara o líquido declarado com o
+    esperado. Por padrão só notas em situação Normal: retenção de nota cancelada
+    não entra na conta. RLS filtra por escritório; empresa alheia chega como 404.
+    """
+    de = _primeiro_dia(competencia_de) if competencia_de else None
+    ate = _primeiro_dia(competencia_ate) if competencia_ate else None
+    if de and ate and de > ate:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="competencia_de não pode ser posterior a competencia_ate",
+        )
+
+    empresa = s.get(Empresa, empresa_id)
+    if empresa is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="não encontrada")
+
+    situacoes = situacao or ["Normal"]
+    filtro = [Nfse.empresa_id == empresa_id, Nfse.situacao.in_(situacoes)]
+    if papel:
+        filtro.append(Nfse.papel == papel)
+    periodo = []
+    if de:
+        periodo.append(Nfse.competencia >= de)
+    if ate:
+        periodo.append(Nfse.competencia <= ate)
+
+    notas = list(s.execute(select(Nfse).where(*filtro, *periodo)).scalars())
+
+    # Nota sem competência não casa com nenhum filtro de período. Em vez de
+    # sumir em silêncio, é contada no Resumo.
+    sem_competencia = 0
+    if periodo:
+        sem_competencia = s.execute(
+            select(func.count()).select_from(Nfse).where(*filtro, Nfse.competencia.is_(None))
+        ).scalar_one()
+
+    filtros = {
+        "Empresa (CNPJ)": empresa.cnpj,
+        "Competência de": competencia_de or "(sem limite)",
+        "Competência até": competencia_ate or "(sem limite)",
+        "Papel": papel or "(todos)",
+        "Situação da NFS-e": ", ".join(situacoes),
+    }
+    buffer = BytesIO()
+    gerar_relatorio_retencoes(
+        notas, buffer, filtros=filtros, somente_divergentes=somente_divergentes,
+        sem_competencia=sem_competencia,
+    )
+    buffer.seek(0)
+
+    nome = f"retencoes_{empresa.cnpj}.xlsx"
+    return StreamingResponse(
+        buffer,
+        media_type=XLSX,
         headers={"Content-Disposition": f'attachment; filename="{nome}"'},
     )

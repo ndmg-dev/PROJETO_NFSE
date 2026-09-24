@@ -350,3 +350,50 @@ def test_modelo_dfe_bruto_tem_o_que_o_repositorio_grava() -> None:
     colunas = {c.name for c in DfeBruto.__table__.columns}
     assert {"nsu", "tipo_documento", "xml_path", "hash_sha256", "status",
             "tentativas_parse", "erro_parse", "chave_acesso"} <= colunas
+
+
+# ============================== o ciclo completo: do ADN à divergência no relatório ===
+
+
+def test_do_adn_ate_a_divergencia_no_relatorio_de_retencoes(  # type: ignore[no-untyped-def]
+    cliente, cenario, engine_admin, armazem
+) -> None:
+    """A nota da discussão (retenções destacadas, líquido igual ao bruto) entra
+    pela fila, é projetada e aparece SINALIZADA no relatório de retenções, ao
+    lado de uma nota consistente que não é."""
+    descricao = "<xDescServ>Honorarios. Valor líquido: R$ 11.262,00</xDescServ>"
+    roteiro = [lote(
+        doc(1, xml_nota(CH1, valor="12000.00", extra=RETENCOES_DA_NOTA_DO_AUDIO + descricao)),
+        doc(2, xml_nota(CH2, valor="500.00", extra="<vLiq>500.00</vLiq>")),
+    )]
+    sincronizar(cenario, "a", roteiro, armazem)
+    projetar(cenario, armazem)
+
+    r = cliente.get(
+        f"/empresas/{cenario['a']['empresa']}/retencoes",
+        headers=entrar(cliente, "a@teste.com"),
+    )
+    assert r.status_code == 200, r.text
+    livro = load_workbook(io.BytesIO(r.content))
+    aba = livro["Retenções"]
+    cab = [c.value for c in aba[1]]
+    linhas = {str(x[0]): x for x in aba.iter_rows(min_row=2, values_only=True)}
+
+    problema, ok = linhas[CH1], linhas[CH2]
+    assert problema[cab.index("Análise")] == "Retenção destacada e não abatida do líquido"
+    assert problema[cab.index("Requer Atenção")] == "Sim"
+    assert problema[cab.index("Líquido Declarado na Nota (R$)")] == 12000
+    assert problema[cab.index("Líquido Esperado - só rotuladas (R$)")] == 11700
+    assert problema[cab.index("Líquido Esperado - com PIS/COFINS (R$)")] == 11262
+    assert problema[cab.index("Cenário que a Descrição Confirma")] == "Com PIS/COFINS"
+    assert ok[cab.index("Análise")] == "Consistente"
+    assert ok[cab.index("Requer Atenção")] == "Não"
+
+    # a que pede atenção vem primeiro, e o resumo quantifica o problema
+    assert next(iter(linhas)) == CH1
+    resumo_aba = {
+        str(x[0]): x[1] for x in livro["Resumo"].iter_rows(values_only=True) if x[0] is not None
+    }
+    assert resumo_aba["Notas que pedem atenção"] == 1
+    assert resumo_aba["Só retenções rotuladas"] == 300
+    assert resumo_aba["Com PIS/COFINS"] == 738
