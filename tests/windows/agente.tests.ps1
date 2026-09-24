@@ -53,11 +53,12 @@ $erros = $null; $tokens = $null
 [void][System.Management.Automation.Language.Parser]::ParseInput($extraido, [ref]$tokens, [ref]$erros)
 Conferir 'o script extraído do .bat não tem erro de sintaxe' ($erros.Count -eq 0)
 foreach ($e in $erros) { Write-Host "      $($e.Message) (linha $($e.Extent.StartLineNumber))" }
-$fonte = ([IO.File]::ReadAllText("$raiz/app/instalador/instalar_agente.ps1", [Text.Encoding]::UTF8) -replace "`r`n", "`n").TrimStart([char]0xFEFF)
-Conferir 'o script extraído é idêntico ao arquivo do repositório' ((($extraido -replace "`r`n", "`n").Trim()) -eq $fonte.Trim())
+$fonte = (([IO.File]::ReadAllText("$raiz/app/instalador/lib_windows.ps1", [Text.Encoding]::UTF8) + "`n" + [IO.File]::ReadAllText("$raiz/app/instalador/instalar_agente.ps1", [Text.Encoding]::UTF8)) -replace "`r`n", "`n").TrimStart([char]0xFEFF)
+Conferir 'o script extraído é a biblioteca + o script do repositório' ((($extraido -replace "`r`n", "`n").Trim()) -eq $fonte.Trim())
 Conferir 'o script tem os acentos íntegros' ($extraido -match 'Não foi possível' -and $extraido -match 'Área de Trabalho')
 
-. "$raiz/app/instalador/instalar_agente.ps1"   # funções, sem executar a instalação
+. "$raiz/app/instalador/lib_windows.ps1"        # biblioteca compartilhada
+. "$raiz/app/instalador/instalar_agente.ps1"     # funções do agente, sem executar a instalação
 
 Write-Host "`no pacote embutido"
 $pasta = Join-Path $tmp 'app'

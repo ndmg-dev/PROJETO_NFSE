@@ -3,18 +3,9 @@
 O contador baixa `Instalar-Agente-NFSe.bat` de /instalar e dá duplo clique. Nada
 de zip para extrair, nada de comando, nada de instalar Java à mão.
 
-Estrutura do arquivo (linhas em CRLF; o cmd falha com LF):
-
-    @echo off ... powershell -Command "<extrai o script depois de #PS1# e o executa>"
-    exit /b
-    #PS1#
-    <instalar_agente.ps1>
-    #PAYLOAD#
-    <zip dos fontes Java + servidor.txt, em base64>
-
-O cmd nunca lê nada depois de `exit /b`, então o script e o pacote podem ficar
-ali, com acentos e tudo. Os marcadores são montados por concatenação na linha de
-comando ('#'+'PS1#') para o texto literal aparecer UMA vez, no lugar certo.
+A estrutura do arquivo está em app/instalador/empacotar.py. Aqui o script é a
+biblioteca lib_windows.ps1 seguida de instalar_agente.ps1, e o pacote é o zip dos
+fontes Java com o servidor.txt.
 
 O pacote não leva segredo nenhum: só os fontes do spike (públicos, do próprio
 repositório) e o endereço deste servidor.
@@ -25,20 +16,21 @@ repositório) e o endereço deste servidor.
 from __future__ import annotations
 
 import argparse
-import base64
 import io
 import re
 import zipfile
 from pathlib import Path
 from typing import Final
 
+from app.instalador.empacotar import MARCADOR_PAYLOAD, MARCADOR_PS1, montar_bat
+
 RAIZ: Final = Path(__file__).resolve().parents[2]
 FONTES_PADRAO: Final = RAIZ / "agente" / "spike"
 SCRIPT_PADRAO: Final = Path(__file__).with_name("instalar_agente.ps1")
 
+BIBLIOTECA_PADRAO: Final = Path(__file__).with_name("lib_windows.ps1")
+
 ARQUIVOS_JAVA: Final = ("Nucleo.java", "ProvarHandshakeMTLS.java", "ProvarHandshakeMTLSGui.java")
-MARCADOR_PS1: Final = "#PS1#"
-MARCADOR_PAYLOAD: Final = "#PAYLOAD#"
 
 _URL_SEGURA: Final = re.compile(r"^https?://[A-Za-z0-9._\-]+(:\d{1,5})?$")
 
@@ -74,34 +66,20 @@ def gerar_instalador(
     *,
     pasta_fontes: Path = FONTES_PADRAO,
     script: Path = SCRIPT_PADRAO,
+    biblioteca: Path = BIBLIOTECA_PADRAO,
 ) -> bytes:
-    corpo_ps1 = script.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
-    for marcador in (MARCADOR_PS1, MARCADOR_PAYLOAD):
-        if marcador in corpo_ps1:
-            raise ValueError(f"o script não pode conter o marcador {marcador}")
-
-    pacote = base64.b64encode(montar_pacote(url_servidor, pasta_fontes)).decode("ascii")
-    linhas_pacote = [pacote[i : i + 76] for i in range(0, len(pacote), 76)]
-
-    cabecalho = [
-        "@echo off",
-        "chcp 65001 >nul",
-        "title Instalando a ferramenta de teste de certificado NFS-e",
-        'set "NFSE_INSTALADOR=%~f0"',
-        'powershell -NoProfile -ExecutionPolicy Bypass -Command "'
-        "$t=[IO.File]::ReadAllText($env:NFSE_INSTALADOR,[Text.Encoding]::UTF8); "
-        "$m='#'+'PS1#'; "
-        'Invoke-Expression $t.Substring($t.LastIndexOf($m)+$m.Length)"',
-        "echo.",
-        "pause",
-        "exit /b",
-        MARCADOR_PS1,
-    ]
-    texto = "\r\n".join(
-        [*cabecalho, *corpo_ps1.split("\n"), MARCADOR_PAYLOAD, *linhas_pacote, ""]
+    # A biblioteca compartilhada vem ANTES do script: as funções de download com
+    # verificação de integridade existem num lugar só, para os dois instaladores.
+    texto = (
+        biblioteca.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
+        + "\n"
+        + script.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
     )
-    # UTF-8 SEM BOM: o cmd tropeça num BOM e a primeira linha vira lixo.
-    return texto.encode("utf-8")
+    return montar_bat(
+        "Instalando a ferramenta de teste de certificado NFS-e",
+        texto,
+        montar_pacote(url_servidor, pasta_fontes),
+    )
 
 
 def main() -> None:
@@ -115,3 +93,12 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+__all__ = [
+    "ARQUIVOS_JAVA",
+    "MARCADOR_PAYLOAD",
+    "MARCADOR_PS1",
+    "gerar_instalador",
+    "montar_pacote",
+    "url_servidor_segura",
+]

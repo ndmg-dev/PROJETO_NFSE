@@ -99,7 +99,10 @@ def test_servidor_txt_traz_o_endereco_de_quem_baixou(cliente: TestClient) -> Non
 def test_o_script_embutido_e_o_do_repositorio(cliente: TestClient) -> None:
     texto = cliente.get(URL).content.decode("utf-8")
     embutido = texto.split(MARCADOR_PS1 + "\r\n", 1)[1].split(MARCADOR_PAYLOAD, 1)[0]
-    fonte = (RAIZ / "app" / "instalador" / "instalar_agente.ps1").read_text(encoding="utf-8")
+    pasta = RAIZ / "app" / "instalador"
+    fonte = (pasta / "lib_windows.ps1").read_text(encoding="utf-8") + "\n" + (
+        pasta / "instalar_agente.ps1"
+    ).read_text(encoding="utf-8")
     assert embutido.replace("\r\n", "\n").strip() == fonte.replace("\r\n", "\n").strip()
 
 
