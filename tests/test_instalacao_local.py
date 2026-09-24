@@ -54,6 +54,10 @@ def _imports_de_terceiros_da_api() -> tuple[set[str], set[str]]:
     for arquivo in (RAIZ / "app").rglob("*.py"):
         if "workers" in arquivo.parts:  # celery e redis são só dos workers
             continue
+        if arquivo.parts[-2:-1] == (
+            "local",
+        ):  # ferramentas da instalação, fora da API (rodar_pip usa o pip do .whl)
+            continue
         arvore = ast.parse(arquivo.read_text(encoding="utf-8"))
         dentro_de_funcao = {
             id(filho)
@@ -116,8 +120,9 @@ def test_api_importa_sem_redis_nem_celery() -> None:
         "import sys; sys.modules['redis'] = None; sys.modules['celery'] = None; "
         "import app.api.main; print('importou')"
     )
-    r = subprocess.run([sys.executable, "-c", codigo], cwd=RAIZ,
-                       capture_output=True, text=True, timeout=60)
+    r = subprocess.run(
+        [sys.executable, "-c", codigo], cwd=RAIZ, capture_output=True, text=True, timeout=60
+    )
     assert r.returncode == 0, r.stderr[-800:]
     assert "importou" in r.stdout
 
@@ -142,8 +147,10 @@ def _url_admin_com(banco: str) -> str:
 
     from sqlalchemy.engine import make_url
 
-    return make_url(os.environ["ADMIN_DATABASE_URL"]).set(database=banco).render_as_string(
-        hide_password=False
+    return (
+        make_url(os.environ["ADMIN_DATABASE_URL"])
+        .set(database=banco)
+        .render_as_string(hide_password=False)
     )
 
 
@@ -159,8 +166,9 @@ def test_garantir_banco_cria_e_e_idempotente(engine_admin) -> None:  # type: ign
         assert garantir_banco(_url_admin_com(nome)) is True, "deveria ter criado"
         assert garantir_banco(_url_admin_com(nome)) is False, "segunda vez não recria"
         with engine_admin.connect() as c:
-            achado = c.execute(text("SELECT count(*) FROM pg_database WHERE datname = :n"),
-                               {"n": nome}).scalar_one()
+            achado = c.execute(
+                text("SELECT count(*) FROM pg_database WHERE datname = :n"), {"n": nome}
+            ).scalar_one()
         assert achado == 1
     finally:
         with engine_admin.connect().execution_options(isolation_level="AUTOCOMMIT") as c:
