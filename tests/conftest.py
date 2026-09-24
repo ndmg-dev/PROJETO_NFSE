@@ -98,8 +98,10 @@ def cenario(engine_admin: Engine):  # type: ignore[no-untyped-def]
     yield dados
     with engine_admin.begin() as c:
         for v in dados.values():
-            # nfse referencia empresa: apaga as notas antes
-            c.execute(text("DELETE FROM nfse WHERE escritorio_id=:e"), {"e": v["escritorio"]})
+            # Ordem por dependência: evento -> nota -> bruto -> empresa.
+            for tabela in ("nfse_evento", "nfse", "dfe_bruto"):
+                c.execute(text(f"DELETE FROM {tabela} WHERE escritorio_id=:e"),
+                          {"e": v["escritorio"]})
             c.execute(text("DELETE FROM empresa WHERE escritorio_id=:e"), {"e": v["escritorio"]})
             c.execute(text("DELETE FROM usuario WHERE escritorio_id=:e"), {"e": v["escritorio"]})
             c.execute(text("DELETE FROM escritorio WHERE id=:e"), {"e": v["escritorio"]})
