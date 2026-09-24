@@ -1,0 +1,68 @@
+# Instalação do sistema numa máquina. Não é para desenvolver (para isso, o
+# docker-compose.yml): aqui não há código montado do disco, nem ferramentas de
+# teste, nem porta do banco aberta, e tudo reinicia sozinho quando a máquina liga.
+#
+# Uso: `iniciar.sh` (Linux/Mac) ou `Iniciar.bat` (Windows). Eles criam o .env com
+# senhas aleatórias, sobem isto e abrem o navegador no assistente de primeiro
+# acesso. Ninguém precisa editar nada.
+name: nfse-instalacao
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nfse
+      POSTGRES_USER: nfse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?rode iniciar.sh ou Iniciar.bat, que criam o .env}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nfse -d nfse"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Sem `ports`: o banco só é alcançável pelos outros serviços, nunca da rede.
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Aplica as migrations ANTES de a API subir. A migration 0003 é quem cria o
+  # papel sem privilégio que a API usa (nfse_app); sem este passo a API tentaria
+  # conectar com um papel que ainda não existe.
+  migrate:
+    build: {context: ., target: instalacao}
+    image: nfse-instalacao-app
+    pull_policy: build   # a imagem é construída aqui; sem isso o compose tenta baixá-la primeiro e imprime um erro de "pull access denied"
+    command: alembic upgrade head
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg://nfse:${POSTGRES_PASSWORD}@db:5432/nfse
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?}
+    depends_on:
+      db: {condition: service_healthy}
+
+  api:
+    image: nfse-instalacao-app   # a mesma imagem que o migrate constrói
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      # A API conecta como papel sem privilégio: superusuário ignora a RLS.
+      DATABASE_URL: postgresql+psycopg://nfse_app:${APP_DB_PASSWORD}@db:5432/nfse
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?}
+      AMBIENTE_ADN: ${AMBIENTE_ADN:-restrita}
+    ports: ["${NFSE_PORTA:-8000}:8000"]
+    volumes: ["xmldata:/data/xml"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+volumes:
+  pgdata:
+  xmldata:
