@@ -21,7 +21,7 @@ def login(dados: LoginIn) -> TokenOut:
         usuario = s.execute(
             text("SELECT id, escritorio_id, papel, senha_hash, ativo "
                  "FROM autenticar(:email)"),
-            {"email": dados.email},
+            {"email": dados.email.strip().lower()},
         ).one_or_none()
 
     # Mesmo erro para usuário inexistente e senha errada: diferenciar entrega
