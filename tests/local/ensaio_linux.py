@@ -25,7 +25,6 @@ import secrets
 import shutil
 import subprocess
 import sys
-import tarfile
 import time
 import urllib.error
 import urllib.request
@@ -123,20 +122,46 @@ def main() -> int:
             not (BASE / "cache" / "de-mentira.jar.parcial").exists(),
         )
 
-    passo("2. Extrair: jar (zip) -> .txz -> pasta pgsql, só com a biblioteca padrão do Python")
+    passo("2. Python SEM pip (como o embutido do Windows) e o código da aplicação")
+    for n in ("app", "alembic"):
+        shutil.copytree(REPO / n, BASE / "app" / n, ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(REPO / "alembic.ini", BASE / "app" / "alembic.ini")
+    venv.EnvBuilder(with_pip=False).create(BASE / "python")
+    py = BASE / "python" / "bin" / "python"
+    conferir(
+        "o Python criado não tem pip",
+        rodar([str(py), "-m", "pip", "--version"], os.environ.copy()).returncode != 0,
+    )
+    env_app = {**os.environ, "PYTHONPATH": str(BASE / "app")}  # no Windows, a linha ..\app do ._pth
+
+    passo("3. Extrair o PostgreSQL com app.local.extrair_txz (só biblioteca padrão do Python)")
     with zipfile.ZipFile(BASE / "cache" / jar) as z:
         txz = next(n for n in z.namelist() if n.endswith(".txz"))
         z.extract(txz, BASE / "cache")
-    with tarfile.open(BASE / "cache" / txz, "r:xz") as t:
-        t.extractall(BASE / "pgsql", filter="data")
+    r = rodar(
+        [str(py), "-m", "app.local.extrair_txz", str(BASE / "cache" / txz), str(BASE / "pgsql")],
+        env_app,
+    )
+    conferir("extração terminou", r.returncode == 0, r.stderr[-300:])
     pg_bin = BASE / "pgsql" / "bin"
     for exe in ("postgres", "initdb", "pg_ctl"):
         conferir(f"{exe} presente", (pg_bin / exe).exists())
+    conferir(
+        "sem argumentos, o módulo recusa com código 2",
+        rodar([str(py), "-m", "app.local.extrair_txz"], env_app).returncode == 2,
+    )
 
-    # --------------------------------------------------------------- 3. Python
-    passo("3. Dependências: as versões do requirements-local.lock (sem os hashes do Windows)")
-    venv.EnvBuilder(with_pip=True).create(BASE / "python")
-    py = BASE / "python" / "bin" / "python"
+    passo("3b. pip: o .whl do PINO REAL, conferido por SHA-256 e executado de dentro do zip")
+    pins = json.loads((REPO / "app" / "instalador" / "pins.json").read_text(encoding="utf-8"))
+    whl = BASE / "cache" / "pip.whl"
+    baixar_verificado(pins["pip"]["url"], pins["pip"]["sha256"], whl)
+    conferir(f"pip {pins['pip']['versao']} baixado e conferido", whl.exists())
+    r = rodar([str(py), "-m", "app.local.rodar_pip", str(whl), "--version"], env_app)
+    conferir(
+        "o pip roda direto do .whl",
+        r.returncode == 0 and pins["pip"]["versao"] in r.stdout,
+        r.stderr[-300:],
+    )
     fixas = [
         ln.split()[0]
         for ln in (REPO / "requirements-local.lock").read_text().splitlines()
@@ -147,27 +172,47 @@ def main() -> int:
         [
             str(py),
             "-m",
-            "pip",
+            "app.local.rodar_pip",
+            str(whl),
             "install",
             "-q",
+            "--no-input",
+            "--disable-pip-version-check",
             "--no-deps",
             "-r",
             str(BASE / "cache" / "fixas.txt"),
         ],
-        os.environ.copy(),
+        env_app,
     )
     conferir(
-        f"{len(fixas)} pacotes instalados nas versões travadas", r.returncode == 0, r.stderr[-300:]
+        f"{len(fixas)} pacotes instalados nas versões travadas", r.returncode == 0, r.stderr[-400:]
     )
-    for n in ("app", "alembic"):
-        shutil.copytree(REPO / n, BASE / "app" / n, ignore=shutil.ignore_patterns("__pycache__"))
-    shutil.copy(REPO / "alembic.ini", BASE / "app" / "alembic.ini")
     lista = rodar(
-        [str(py), "-m", "pip", "list", "--format=freeze"], os.environ.copy()
-    ).stdout.lower()
+        [
+            str(py),
+            "-c",
+            "import importlib.metadata as m; "
+            "print(' '.join(sorted(d.metadata['Name'].lower() for d in m.distributions())))",
+        ],
+        env_app,
+    ).stdout
     conferir(
         "Celery e Redis NÃO estão instalados (a API local não os usa)",
         "celery" not in lista and "redis" not in lista,
+    )
+    r = rodar(
+        [
+            str(py),
+            "-c",
+            "import fastapi, sqlalchemy, psycopg, bcrypt, pydantic, uvicorn, alembic, "
+            "openpyxl, httpx; print(psycopg.pq.version())",
+        ],
+        env_app,
+    )
+    conferir(
+        "a verificação de importação do instalador passa (inclui carregar a libpq)",
+        r.returncode == 0,
+        r.stderr[-300:],
     )
 
     # ------------------------------------------------------------------ 4. initdb
