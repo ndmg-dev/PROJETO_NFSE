@@ -33,3 +33,4 @@ instalacao.log
 
 # gerado por make test-windows
 .tmp-windows
+dist/
