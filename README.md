@@ -38,7 +38,7 @@ Depois:
 ```bash
 make up          # sobe Postgres e Redis
 make migrate     # aplica o schema
-make test        # 327 testes — confirma que a instalação está íntegra
+make test        # 373 testes — confirma que a instalação está íntegra
 ```
 
 Se `make` não existir na máquina, os comandos equivalentes estão no
@@ -74,16 +74,17 @@ estão em [agente/README.md](agente/README.md).
 | 1 — infra, dinheiro, schema, RLS | pronta |
 | 1 — autenticação, API de empresas | pronta |
 | 1 — relatório com paridade de portal | pronta |
+| 1 — relatório de retenções e divergências de líquido | pronto; com dado real, depende do contrato do ADN |
 | 1 — parser, sincronização e projeção para `nfse` (mecânica) | pronta; contrato do ADN pendente |
 | 1 — agente local (Java + `SunMSCAPI`) | **spike**, não verificado — precisa de estação Windows |
 | 2, 3 | não iniciadas |
 
-327 testes Python. Tudo roda em container.
+373 testes Python. Tudo roda em container.
 
 ```bash
 cp .env.exemplo .env      # preencha os segredos
 make up && make migrate
-make test                 # 327 testes
+make test                 # 373 testes
 make lint types reversivel
 ```
 
