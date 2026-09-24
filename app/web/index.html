@@ -141,14 +141,50 @@ async function carregar() {
   for (const e of lista) {
     const tr = document.createElement("tr");
     const cnpjFmt = e.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
-    tr.innerHTML = `<td><b>${e.razao_social}</b></td><td>${cnpjFmt}</td><td>${e.municipio_ibge || "—"}</td>`
-      + `<td>${e.regime_tributario || "—"}</td><td><span class="pill on">ativo</span></td>`
-      + `<td style="white-space:nowrap">`
-      + `<button class="sec btn-rel" style="margin:0;padding:6px 10px" data-id="${e.id}" data-cnpj="${e.cnpj}">📊 Relatório</button> `
-      + `<button class="sec btn-zip" style="margin:0;padding:6px 10px" data-id="${e.id}" data-cnpj="${e.cnpj}">🗜️ Notas (ZIP)</button>`
-      + `</td>`;
-    tr.querySelector(".btn-rel").onclick = ev => baixarRelatorio(ev.target.dataset.id, ev.target.dataset.cnpj);
-    tr.querySelector(".btn-zip").onclick = ev => baixarZip(ev.target.dataset.id, ev.target.dataset.cnpj);
+
+    // Nada vindo da API entra como HTML: razão social e regime são texto livre
+    // digitado por qualquer operador, e interpolá-los em innerHTML executaria
+    // marcação alheia no navegador de quem abrir a lista (XSS armazenado).
+    // textContent trata tudo como texto, sempre.
+    const celula = (texto, negrito) => {
+      const td = document.createElement("td");
+      if (negrito) {
+        const b = document.createElement("b");
+        b.textContent = texto;
+        td.appendChild(b);
+      } else {
+        td.textContent = texto;
+      }
+      return td;
+    };
+    const botao = (rotulo, acao) => {
+      const b = document.createElement("button");
+      b.className = "sec";
+      b.style.cssText = "margin:0;padding:6px 10px";
+      b.textContent = rotulo;
+      b.onclick = acao;
+      return b;
+    };
+
+    tr.appendChild(celula(e.razao_social, true));
+    tr.appendChild(celula(cnpjFmt));
+    tr.appendChild(celula(e.municipio_ibge || "—"));
+    tr.appendChild(celula(e.regime_tributario || "—"));
+
+    const tdStatus = document.createElement("td");
+    const pill = document.createElement("span");
+    pill.className = "pill on";
+    pill.textContent = "ativo";
+    tdStatus.appendChild(pill);
+    tr.appendChild(tdStatus);
+
+    const tdAcoes = document.createElement("td");
+    tdAcoes.style.whiteSpace = "nowrap";
+    tdAcoes.appendChild(botao("📊 Relatório", () => baixarRelatorio(e.id, e.cnpj)));
+    tdAcoes.appendChild(document.createTextNode(" "));
+    tdAcoes.appendChild(botao("🗜️ Notas (ZIP)", () => baixarZip(e.id, e.cnpj)));
+    tr.appendChild(tdAcoes);
+
     tb.appendChild(tr);
   }
 }
