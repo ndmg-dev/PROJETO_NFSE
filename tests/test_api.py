@@ -8,62 +8,9 @@ certificado passou a ser problema exclusivo do agente local.
 
 from __future__ import annotations
 
-import uuid
-
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
-from sqlalchemy.engine import Engine
 
-from app.core.seguranca import hash_senha
-
-CNPJ = "07199546000162"
-SENHA_USUARIO = "senha-de-teste-123"
-
-
-@pytest.fixture
-def cliente() -> TestClient:
-    from app.api.main import app
-
-    return TestClient(app, raise_server_exceptions=False)
-
-
-@pytest.fixture
-def cenario(engine_admin: Engine):  # type: ignore[no-untyped-def]
-    """Dois escritórios, um admin em cada, uma empresa em cada."""
-    dados = {}
-    with engine_admin.begin() as c:
-        for rotulo in ("a", "b"):
-            eid, uid, empid = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-            c.execute(text("INSERT INTO escritorio (id, nome) VALUES (:i, :n)"),
-                      {"i": eid, "n": f"Escritório {rotulo}"})
-            c.execute(
-                text("""INSERT INTO usuario (id, escritorio_id, email, senha_hash,
-                        papel, ativo) VALUES (:i, :e, :m, :h, 'admin', true)"""),
-                {"i": uid, "e": eid, "m": f"{rotulo}@teste.com",
-                 "h": hash_senha(SENHA_USUARIO)},
-            )
-            c.execute(
-                text("""INSERT INTO empresa (id, escritorio_id, cnpj, cnpj_raiz,
-                        razao_social, ultimo_nsu, sync_ativo)
-                        VALUES (:i, :e, :c, :r, :rs, 0, true)"""),
-                {"i": empid, "e": eid, "c": CNPJ, "r": CNPJ[:8],
-                 "rs": f"Cliente {rotulo}"},
-            )
-            dados[rotulo] = {"escritorio": eid, "usuario": uid, "empresa": empid}
-    yield dados
-    with engine_admin.begin() as c:
-        for v in dados.values():
-            c.execute(text("DELETE FROM empresa WHERE escritorio_id=:e"), {"e": v["escritorio"]})
-            c.execute(text("DELETE FROM usuario WHERE escritorio_id=:e"), {"e": v["escritorio"]})
-            c.execute(text("DELETE FROM escritorio WHERE id=:e"), {"e": v["escritorio"]})
-
-
-def entrar(cliente: TestClient, email: str) -> dict[str, str]:
-    r = cliente.post("/auth/login", json={"email": email, "senha": SENHA_USUARIO})
-    assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
-
+from tests.apoio_api import SENHA_USUARIO, entrar
 
 # ------------------------------------------------------------------ auth ---
 
