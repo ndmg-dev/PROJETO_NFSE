@@ -394,6 +394,49 @@ def main() -> int:
         json.loads(http("GET", "/setup/status")[1]) == {"configurado": True, "verificacoes": []},
     )
 
+    passo("10b. Cópia de segurança a frio e restauração (a mesma lógica dos .ps1)")
+    api.terminate()
+    api.wait(timeout=20)
+    pg("stop")
+    copia = BASE / "copia.zip"
+    with zipfile.ZipFile(copia, "w", zipfile.ZIP_DEFLATED) as z:
+        for arq in sorted(dados.rglob("*")):
+            if arq.name == "postmaster.pid":
+                continue
+            # pastas vazias também (pg_wal/archive_status...): o .NET as inclui e o PG exige
+            z.write(arq, arq.relative_to(dados.parent).as_posix())
+    conferir("cópia gerada com o PG parado", copia.stat().st_size > 1_000_000)
+    conferir("pg_ctl start após a cópia", pg("start").returncode == 0)
+    api = subir_api()
+    tok = json.loads(
+        http("POST", "/auth/login", {"email": "ana@local.com", "senha": ok["senha"]})[1]
+    )["access_token"]
+    st, _, _ = http(
+        "POST", "/empresas", {"cnpj": "11.222.333/0001-81", "razao_social": "DEPOIS DA COPIA"}, tok
+    )
+    conferir("cadastrei uma 2ª empresa DEPOIS da cópia", st == 201)
+    api.terminate()
+    api.wait(timeout=20)
+    pg("stop")
+    antes = dados.parent / "pg.antes"
+    dados.rename(antes)
+    with zipfile.ZipFile(copia) as z:
+        z.extractall(dados.parent)
+    # o zip não guarda o modo; o PostgreSQL do Linux exige 0700 (o Windows não tem essa regra)
+    dados.chmod(0o700)
+    conferir("os dados de antes foram guardados, não apagados", antes.is_dir())
+    conferir("pg_ctl start com a cópia restaurada", pg("start").returncode == 0)
+    api = subir_api()
+    tok = json.loads(
+        http("POST", "/auth/login", {"email": "ana@local.com", "senha": ok["senha"]})[1]
+    )["access_token"]
+    empresas = json.loads(http("GET", "/empresas", token=tok)[1])
+    conferir(
+        "restaurado: só a empresa de antes da cópia",
+        [e["cnpj_raiz"] for e in empresas] == ["07199546"],
+        str(empresas),
+    )
+
     passo("11. Nenhuma senha nos logs")
     api.terminate()
     api.wait(timeout=20)

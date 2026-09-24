@@ -10,58 +10,60 @@ em autenticação ou sincronização.
 
 ## Como instalar
 
-Sem digitar comando nenhum. São duas partes, em lugares diferentes, porque a
-arquitetura não é uma coisa só (spec §3.3-A): **um servidor** para o escritório
-e o **teste de certificado** em cada estação de contador.
+Sem digitar comando nenhum. O caminho principal é **tudo em cada computador
+Windows do contador, sem Docker e sem servidor**: cada um tem o próprio banco, o
+sistema e o teste de certificado (spec §3.3-A).
 
-### 1. O servidor (uma vez, em um computador que fique ligado)
+### Windows (caminho principal)
 
-Precisa do **Docker**: no Windows, o [Docker Desktop](https://www.docker.com/products/docker-desktop/);
-no Linux/Mac, o Docker Engine.
+Precisa de Windows 10 ou mais novo, internet na primeira vez (cerca de 250 MB, com
+verificação de integridade) e ~1,5 GB livres. **Não pede administrador.**
 
-1. Baixe ou clone este repositório.
-2. **Windows:** dê duplo clique em **`Iniciar.bat`**.
-   **Linux/Mac:** dê duplo clique em (ou rode) **`iniciar.sh`**.
-3. O navegador abre sozinho no **assistente de primeiro acesso**. Digite o nome do
-   escritório, o seu e-mail e uma senha. Pronto.
+1. Consiga o arquivo **`Instalar-NFSe.bat`** (quem mantém o projeto o gera com
+   `make instalador-windows`; ele fica em `dist/`).
+2. Dê **duplo clique**. Se o Windows avisar que o arquivo é desconhecido, clique
+   em *Mais informações* → *Executar assim mesmo* (o instalador não tem assinatura digital).
+3. Espere. Ele instala o Python, o banco PostgreSQL e o sistema em
+   `%LOCALAPPDATA%\NFSe`, cria as senhas sozinho e abre o navegador no
+   **assistente de primeiro acesso**: nome do escritório, e-mail e senha.
 
-O instalador cria as senhas do sistema sozinho (ficam em `.env`, **guarde uma cópia
-em local seguro**), sobe o banco e a aplicação, aplica a estrutura do banco e abre
-o navegador já com o código de configuração preenchido. Pode rodar de novo quando
-quiser: não apaga nada nem troca senha existente. Se o Docker não estiver
-instalado ou aberto, ele explica o que fazer.
+Ficam atalhos na Área de Trabalho e no Menu Iniciar (pasta *NFS-e*): abrir o
+sistema, parar, **cópia de segurança**, restaurar e desinstalar, mais o teste de
+certificado. Rodar o instalador de novo atualiza o código e **mantém os dados**.
 
-Para acessar de outros computadores, use o endereço que o instalador mostra no fim
-(algo como `http://10.0.0.106:8000`).
+A cópia de segurança vai para *Documentos\NFSe-copias*. Ela inclui as senhas do
+sistema (sem elas o banco restaurado não abriria): **guarde em lugar seguro**. O
+desinstalar sempre salva uma cópia antes de apagar. Se der erro, mande o arquivo
+`%LOCALAPPDATA%\NFSe\logs\instalacao.log`.
 
-### 2. Cada estação de contador (Windows)
+### Alternativa: servidor com Docker (um para o escritório)
 
-1. No navegador da estação, abra **`http://ENDEREÇO-DO-SERVIDOR:8000/instalar`**.
-2. Clique em **Baixar o instalador** e abra o arquivo `Instalar-Agente-NFSe.bat`.
-3. Espere. Na primeira vez ele baixa uma cópia do Java (cerca de 200 MB, com
-   verificação de integridade), prepara tudo e abre a janela do teste.
-
-Não pede permissão de administrador e não precisa instalar Java antes.
+Para quem prefere um servidor central: precisa do Docker (Docker Desktop no
+Windows). Dê duplo clique em **`Iniciar.bat`** (Windows) ou **`iniciar.sh`**
+(Linux/Mac); o navegador abre no assistente. As senhas ficam em `.env` (**guarde
+uma cópia**). As estações baixam o teste de certificado em
+`http://ENDEREÇO-DO-SERVIDOR:8000/instalar`.
 
 ### O que ainda não é como você gostaria
 
-- **O agente completo não existe.** O que a estação instala hoje é a **ferramenta de
-  teste de certificado** (o spike): ela responde se o certificado A1 já instalado
-  pode ser usado sem exportá-lo. Quando o agente existir, o mesmo link o instalará.
-- **Os instaladores do Windows não foram executados num Windows.** Os testes rodam
-  em PowerShell 7 num container Linux e provam sintaxe, o formato dos arquivos e a
-  lógica pura. **Não provam** o Windows PowerShell 5.1, o Docker Desktop, o javac, o
-  atalho na Área de Trabalho nem o `SunMSCAPI`. A estrutura do zip real do Java e o
-  módulo `jdk.crypto.mscapi` foram conferidos baixando o arquivo de verdade.
-- **O instalador da estação não tem assinatura digital.** O Windows vai avisar que
-  o arquivo é desconhecido (o `/instalar` explica o que clicar); antivírus mais
-  rígidos podem bloqueá-lo.
-- **O acesso é por HTTP, sem criptografia.** Numa rede interna de confiança é
-  aceitável para começar, mas a senha do administrador e o arquivo do instalador
-  trafegam em claro. **Antes de abrir para fora da rede do escritório, coloque HTTPS
-  na frente** (um proxy reverso com certificado).
-- **Precisa de Docker no servidor.** Num Windows isso significa o Docker Desktop
-  rodando; se a máquina desligar, o sistema cai até ela voltar.
+- **Nenhum instalador foi executado num Windows.** Os testes rodam em PowerShell 7
+  num container Linux e provam sintaxe, o pacote e a lógica pura; um ensaio Linux
+  usa os mesmos binários do PostgreSQL e prova a sequência (banco, migrations, API,
+  reinício, cópia e restauração). **Não provam** o Windows PowerShell 5.1, o
+  `postgres.exe`/`python.exe` do Windows, atalhos, caixas de mensagem, SmartScreen
+  nem o `SunMSCAPI`. O primeiro teste real precisa de um PC Windows; me devolva o `instalacao.log`.
+- **O agente completo não existe.** A estação só tem a **ferramenta de teste de
+  certificado**, que diz se o certificado A1 já instalado pode ser usado sem
+  exportá-lo. A sincronização com o ADN ainda depende da Fase 0 (certificado da AB
+  e contrato do ADN).
+- **Sem assinatura digital**: o Windows e alguns antivírus vão desconfiar.
+- **Dados por computador**: cada PC tem o próprio banco; não há visão central do
+  escritório nesse modo.
+- **Python 3.12.10 embutido** não recebe correções de segurança posteriores; o
+  banco usa ordenação sem acento (`--locale=C`).
+- **Modo Docker: acesso por HTTP sem criptografia.** Coloque HTTPS na frente
+  antes de abrir para fora da rede do escritório. No modo local o acesso é só
+  por 127.0.0.1.
 
 ### Para quem desenvolve
 
@@ -91,7 +93,7 @@ make lint types reversivel
 | 1 — agente local (Java + `SunMSCAPI`) | **spike**, não verificado — precisa de estação Windows |
 | 2, 3 | não iniciadas |
 
-431 testes Python. Tudo roda em container.
+443 testes Python. Tudo roda em container.
 
 
 ## Mudança de arquitetura (22/09/2026)
