@@ -313,7 +313,12 @@ function Encerrar-Processos-Da-Instalacao($C) {
         $caminho = $null
         try { $caminho = $p.Path } catch { }
         if ($caminho -and $caminho.StartsWith($raiz, [StringComparison]::OrdinalIgnoreCase)) {
-            try { Stop-Process -Id $p.Id -Force -ErrorAction Stop; $encerrados += $p.Id } catch { }
+            try { Stop-Process -Id $p.Id -Force -ErrorAction Stop; $encerrados += $p.Id }
+            catch { Dizer "  AVISO: não consegui encerrar $($p.ProcessName) (pid $($p.Id)): $($_.Exception.Message)" }
+        } elseif (-not $caminho -and $p.ProcessName -match '^(python|pythonw|postgres|pg_ctl|java|javaw)$') {
+            # Um programa comum não enxerga o caminho de um processo aberto como
+            # administrador: é o que sobra de uma instalação feita "como administrador".
+            Dizer "  AVISO: há um $($p.ProcessName) (pid $($p.Id)) que não consigo inspecionar; se a pasta continuar presa, encerre-o no Gerenciador de Tarefas ou reinicie o computador."
         }
     }
     if ($encerrados.Count -gt 0) { Start-Sleep -Milliseconds 800 }
