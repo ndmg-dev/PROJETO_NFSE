@@ -29,7 +29,7 @@ public final class ProvarHandshakeMTLSGui extends JFrame {
     private final JTextField campoUrl = new JTextField("https://client.badssl.com/");
     private final JButton botaoListar = new JButton("1. Ver certificados desta máquina");
     private final JButton botaoTestar = new JButton("2. Testar conexão com um certificado");
-    private final JButton botaoCadastrar = new JButton("3. Cadastrar a empresa deste certificado no NFS-e");
+    private final JButton botaoCadastrar = new JButton("3. Cadastrar as empresas dos certificados no NFS-e");
 
     private KeyStore storeAberta;
 
@@ -167,7 +167,7 @@ public final class ProvarHandshakeMTLSGui extends JFrame {
     private void cadastrarEmpresa() {
         comBotoesDesligados(() -> {
             escrever("");
-            escrever("Cadastrar a empresa do certificado no NFS-e");
+            escrever("Cadastrar as empresas dos certificados no NFS-e");
             try {
                 if (storeAberta == null) {
                     storeAberta = Nucleo.abrirStoreDoWindows();
@@ -188,34 +188,37 @@ public final class ProvarHandshakeMTLSGui extends JFrame {
                     escrever("Nenhum e-CNPJ encontrado em Pessoal (CurrentUser\\My). Nada foi cadastrado.");
                     return;
                 }
-                int escolhida = 0;
-                if (empresas.size() > 1) {
-                    Object o = naTela(() -> JOptionPane.showInputDialog(this, "Qual empresa cadastrar?",
-                        "NFS-e", JOptionPane.QUESTION_MESSAGE, null, rotulos.toArray(), rotulos.get(0)));
-                    if (o == null) {
-                        escrever("Cancelado.");
-                        return;
-                    }
-                    escolhida = rotulos.indexOf(o);
-                }
-                var empresa = empresas.get(escolhida);
-
                 var campoEmail = new JTextField(24);
                 var campoSenha = new JPasswordField(24);
                 int ok = naTela(() -> JOptionPane.showConfirmDialog(this,
-                    new Object[]{"Entre com o seu usuário do sistema NFS-e:", "E-mail", campoEmail, "Senha", campoSenha},
-                    "Cadastrar " + empresa.razaoSocial(), JOptionPane.OK_CANCEL_OPTION));
+                    new Object[]{"Serão cadastradas " + empresas.size() + " empresa(s) dos certificados deste computador:",
+                        String.join("\n", rotulos), " ", "Entre com o seu usuário do sistema NFS-e:",
+                        "E-mail", campoEmail, "Senha", campoSenha},
+                    "Cadastrar empresas dos certificados", JOptionPane.OK_CANCEL_OPTION));
                 if (ok != JOptionPane.OK_OPTION) {
                     escrever("Cancelado.");
                     return;
                 }
                 char[] senha = campoSenha.getPassword();
                 try {
-                    String token = CadastroEmpresa.entrar(enderecoDoSistema(), campoEmail.getText(), new String(senha));
-                    var situacao = CadastroEmpresa.cadastrar(enderecoDoSistema(), token, empresa);
-                    escrever(situacao == CadastroEmpresa.Situacao.CRIADA
-                        ? "CADASTRADA: " + empresa.razaoSocial() + " (" + empresa.cnpj() + "). Atualize a página do NFS-e."
-                        : "Esta empresa já estava cadastrada (" + empresa.cnpj() + "). Nada foi alterado.");
+                    String base = enderecoDoSistema();
+                    String token = CadastroEmpresa.entrar(base, campoEmail.getText(), new String(senha));
+                    int novas = 0;
+                    int jaExistiam = 0;
+                    for (var empresa : empresas) {
+                        try {
+                            if (CadastroEmpresa.cadastrar(base, token, empresa) == CadastroEmpresa.Situacao.CRIADA) {
+                                novas++;
+                                escrever("  cadastrada: " + empresa.razaoSocial() + " (" + empresa.cnpj() + ")");
+                            } else {
+                                jaExistiam++;
+                                escrever("  já existia: " + empresa.razaoSocial() + " (" + empresa.cnpj() + ")");
+                            }
+                        } catch (CadastroEmpresa.ErroDeCadastro e) {
+                            escrever("  NÃO CADASTRADA: " + empresa.razaoSocial() + ": " + e.getMessage());
+                        }
+                    }
+                    escrever("Pronto: " + novas + " nova(s), " + jaExistiam + " já existia(m). Atualize a página do NFS-e.");
                 } finally {
                     java.util.Arrays.fill(senha, '\0');
                     campoSenha.setText("");
