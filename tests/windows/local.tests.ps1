@@ -1,4 +1,4 @@
-# Testes das funções do sistema local (comum_nfse.ps1 e a biblioteca), em PowerShell 7
+﻿# Testes das funções do sistema local (comum_nfse.ps1 e a biblioteca), em PowerShell 7
 # num container Linux: `make test-windows`.
 #
 # LIMITE, EXPLÍCITO: provam a lógica pura, a montagem de argumentos e ambiente, o
@@ -16,6 +16,20 @@ function Mensagem-De([scriptblock]$Bloco) { try { & $Bloco | Out-Null; return ''
 
 . "$raiz/app/instalador/lib_windows.ps1"
 . "$raiz/app/instalador/windows/comum_nfse.ps1"
+
+Write-Host "`no .bat do instalador local: o que a linha real executa"
+$batLocal = Join-Path $raiz '.tmp-windows/Instalar-NFSe.bat'
+Conferir 'Instalar-NFSe.bat foi gerado (rode via make test-windows)' (Test-Path $batLocal)
+$textoLocal = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($batLocal))
+$cmdLocal = ($textoLocal -split "`r`n") | Where-Object { $_ -like 'powershell *' } | Select-Object -First 1
+$comando = $cmdLocal.Substring($cmdLocal.IndexOf('-Command "') + 10).TrimEnd('"').Replace('Invoke-Expression', 'Write-Output')
+$env:NFSE_INSTALADOR = $batLocal
+$extraidoLocal = (& pwsh -NoProfile -Command $comando) -join "`n"
+$erros = $null; $tokens = $null
+[void][System.Management.Automation.Language.Parser]::ParseInput($extraidoLocal, [ref]$tokens, [ref]$erros)
+Conferir 'o script executado não tem erro de sintaxe' ($erros.Count -eq 0)
+Conferir 'o pacote em base64 NÃO vai junto para o Invoke-Expression' ($extraidoLocal -notmatch '(?m)^[A-Za-z0-9+/=]{70,}$' -and $extraidoLocal -match 'function Principal')
+Remove-Item Env:NFSE_INSTALADOR
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('nfse-loc-' + [guid]::NewGuid())
 New-Item -ItemType Directory $tmp | Out-Null

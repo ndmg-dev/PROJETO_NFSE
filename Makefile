@@ -24,6 +24,7 @@ test-web: ; docker run --rm --user "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURD
 test-windows:
 	mkdir -p .tmp-windows
 	$(RUN) --no-deps --user "$$(id -u):$$(id -g)" api python -m app.instalador.agente --url http://servidor-de-teste:8000 --saida /app/.tmp-windows/Instalar-Agente-NFSe.bat
+	$(RUN) --no-deps --user "$$(id -u):$$(id -g)" api python -m app.instalador.local --saida /app/.tmp-windows/Instalar-NFSe.bat
 	docker run --rm -v "$(CURDIR)":/work:ro -w /work mcr.microsoft.com/powershell:latest pwsh -NoProfile -File tests/windows/todos.ps1
 # Ensaio da instalação local (sem Docker) no Linux, com os mesmos binários de
 # PostgreSQL 16.15.0. Prova a sequência e o modo local da aplicação; NAO prova nada

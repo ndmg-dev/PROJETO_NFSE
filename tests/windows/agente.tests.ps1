@@ -1,4 +1,4 @@
-# Testes do instalador do agente (app/instalador), em PowerShell 7 num container
+﻿# Testes do instalador do agente (app/instalador), em PowerShell 7 num container
 # Linux: `make test-windows`.
 #
 # LIMITE, EXPLÍCITO: provam a extração do arquivo gerado, a lógica pura e a
@@ -45,10 +45,13 @@ Conferir 'linhas do pacote com até 76 caracteres' (($linhas[($iPay + 1)..($linh
 Write-Host "`na linha de comando do .bat extrai o script certo"
 $cmd = $linhas | Where-Object { $_ -like 'powershell *' } | Select-Object -First 1
 Conferir 'existe a linha que chama o PowerShell' ([bool]$cmd)
-# reproduz exatamente o que a linha do .bat faz: tudo depois do marcador #PS1#
-$m = '#' + 'PS1#'
-$extraido = $texto.Substring($texto.LastIndexOf($m) + $m.Length)
-$extraido = $extraido.Substring(0, $extraido.LastIndexOf('#' + 'PAYLOAD#'))
+# EXECUTA a linha real do .bat (trocando só Invoke-Expression por Write-Output, para
+# ver o texto que seria executado). Refazer o corte aqui mascarou um defeito de verdade:
+# o pacote em base64 ia junto para o Invoke-Expression.
+$comando = $cmd.Substring($cmd.IndexOf('-Command "') + 10).TrimEnd('"').Replace('Invoke-Expression', 'Write-Output')
+$env:NFSE_INSTALADOR = $bat
+$extraido = (& pwsh -NoProfile -Command $comando) -join "`n"
+Conferir 'o que a linha do .bat executa NÃO contém o pacote em base64' ($extraido -notmatch '(?m)^[A-Za-z0-9+/=]{70,}$')
 $erros = $null; $tokens = $null
 [void][System.Management.Automation.Language.Parser]::ParseInput($extraido, [ref]$tokens, [ref]$erros)
 Conferir 'o script extraído do .bat não tem erro de sintaxe' ($erros.Count -eq 0)

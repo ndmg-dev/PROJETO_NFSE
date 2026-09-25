@@ -40,8 +40,10 @@ def montar_bat(titulo: str, script: str, pacote: bytes) -> bytes:
         'set "NFSE_INSTALADOR=%~f0"',
         'powershell -NoProfile -ExecutionPolicy Bypass -Command "'
         "$t=[IO.File]::ReadAllText($env:NFSE_INSTALADOR,[Text.Encoding]::UTF8); "
-        "$m='#'+'PS1#'; "
-        'Invoke-Expression $t.Substring($t.LastIndexOf($m)+$m.Length)"',
+        "$m='#'+'PS1#'; $f='#'+'PAYLOAD#'; "
+        "$i=$t.LastIndexOf($m)+$m.Length; "
+        # só o script: o pacote em base64 vem depois de #PAYLOAD# e NÃO é PowerShell
+        'Invoke-Expression $t.Substring($i,$t.LastIndexOf($f)-$i)"',
         "echo.",
         "pause",
         "exit /b",
