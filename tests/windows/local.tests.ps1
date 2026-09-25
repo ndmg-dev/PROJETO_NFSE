@@ -31,6 +31,12 @@ Conferir 'o script executado não tem erro de sintaxe' ($erros.Count -eq 0)
 Conferir 'o pacote em base64 NÃO vai junto para o Invoke-Expression' ($extraidoLocal -notmatch '(?m)^[A-Za-z0-9+/=]{70,}$' -and $extraidoLocal -match 'function Principal')
 Remove-Item Env:NFSE_INSTALADOR
 
+Write-Host "`ninstalação nova: nada instalado ainda"
+$vazio = Caminhos-Nfse (Join-Path ([IO.Path]::GetTempPath()) ('nfse-vazio-' + [guid]::NewGuid()))
+Conferir 'Postgres-Rodando é falso, sem exceção, quando o pg_ctl.exe não existe' ((Postgres-Rodando $vazio) -eq $false)
+Conferir 'Parar-Postgres não faz nada e não falha numa instalação nova' (-not (Lanca { Parar-Postgres $vazio }))
+Conferir 'Parar-Api não falha numa instalação nova' (-not (Lanca { Parar-Api $vazio }))
+
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('nfse-loc-' + [guid]::NewGuid())
 New-Item -ItemType Directory $tmp | Out-Null
 function Novo-Exe([string]$Caminho, [string]$Corpo) {

@@ -222,6 +222,10 @@ function Pg-Ctl($C, [string[]]$Argumentos, [int]$TimeoutMs = 120000) {
 }
 
 function Postgres-Rodando($C) {
+    # Instalação nova: sem pg_ctl.exe ou sem banco criado, não há o que estar rodando
+    # (e executar um programa que não existe lança exceção).
+    if (-not (Test-Path -LiteralPath (Join-Path $C.PgBin 'pg_ctl.exe'))) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $C.Dados 'PG_VERSION'))) { return $false }
     return ((Pg-Ctl $C @('status', '-D', $C.Dados) 30000).Codigo -eq 0)
 }
 
