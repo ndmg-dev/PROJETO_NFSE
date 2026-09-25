@@ -67,7 +67,7 @@ Write-Host "`no pacote embutido"
 $pasta = Join-Path $tmp 'app'
 Expandir-Pacote (Extrair-Payload $bat) $pasta
 $nomes = (Get-ChildItem $pasta -File | ForEach-Object Name) | Sort-Object
-Conferir 'contém exatamente os 3 fontes Java, servidor.txt e LEIAME.txt' (($nomes -join ',') -eq 'LEIAME.txt,Nucleo.java,ProvarHandshakeMTLS.java,ProvarHandshakeMTLSGui.java,servidor.txt')
+Conferir 'contém exatamente os 4 fontes Java, servidor.txt e LEIAME.txt' (($nomes -join ',') -eq 'CadastroEmpresa.java,LEIAME.txt,Nucleo.java,ProvarHandshakeMTLS.java,ProvarHandshakeMTLSGui.java,servidor.txt')
 Conferir 'servidor.txt traz o endereço do servidor' ((Get-Content "$pasta/servidor.txt" -Raw).Trim() -eq $urlEsperada)
 foreach ($java in 'Nucleo.java', 'ProvarHandshakeMTLS.java', 'ProvarHandshakeMTLSGui.java') {
     $orig = (Get-FileHash "$raiz/agente/spike/$java").Hash

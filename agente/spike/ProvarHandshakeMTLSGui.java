@@ -8,6 +8,11 @@
 import java.awt.BorderLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Supplier;
+import javax.swing.JOptionPane;
+import javax.swing.JPasswordField;
 import java.security.KeyStore;
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -24,6 +29,7 @@ public final class ProvarHandshakeMTLSGui extends JFrame {
     private final JTextField campoUrl = new JTextField("https://client.badssl.com/");
     private final JButton botaoListar = new JButton("1. Ver certificados desta máquina");
     private final JButton botaoTestar = new JButton("2. Testar conexão com um certificado");
+    private final JButton botaoCadastrar = new JButton("3. Cadastrar a empresa deste certificado no NFS-e");
 
     private KeyStore storeAberta;
 
@@ -46,15 +52,17 @@ public final class ProvarHandshakeMTLSGui extends JFrame {
 
         botaoTestar.setEnabled(false);
         botaoListar.addActionListener(e -> listarCertificados());
+        botaoCadastrar.addActionListener(e -> cadastrarEmpresa());
         botaoTestar.addActionListener(e -> testarConexao());
 
         JPanel linhaUrl = new JPanel(new BorderLayout(8, 0));
         linhaUrl.add(new javax.swing.JLabel("Endereço de teste:"), BorderLayout.WEST);
         linhaUrl.add(campoUrl, BorderLayout.CENTER);
 
-        JPanel botoes = new JPanel(new GridLayout(1, 2, 8, 0));
+        JPanel botoes = new JPanel(new GridLayout(2, 2, 8, 8));
         botoes.add(botaoListar);
         botoes.add(botaoTestar);
+        botoes.add(botaoCadastrar);
 
         JPanel topo = new JPanel(new BorderLayout(0, 8));
         topo.add(linhaUrl, BorderLayout.NORTH);
@@ -75,6 +83,7 @@ public final class ProvarHandshakeMTLSGui extends JFrame {
     private void comBotoesDesligados(Runnable tarefa) {
         botaoListar.setEnabled(false);
         botaoTestar.setEnabled(false);
+        botaoCadastrar.setEnabled(false);
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() {
                 tarefa.run();
@@ -83,6 +92,7 @@ public final class ProvarHandshakeMTLSGui extends JFrame {
             @Override protected void done() {
                 botaoListar.setEnabled(true);
                 botaoTestar.setEnabled(storeAberta != null);
+                botaoCadastrar.setEnabled(true);
             }
         }.execute();
     }
@@ -125,6 +135,97 @@ public final class ProvarHandshakeMTLSGui extends JFrame {
                 escrever("Passo 2: clique em \"Testar conexão com um certificado\".");
             } catch (Exception e) {
                 escrever("Erro ao listar certificados: " + e);
+            }
+        });
+    }
+
+    /** Endereço do sistema local: servidor.txt (escrito pelo instalador) ou a porta padrão. */
+    private static String enderecoDoSistema() {
+        try {
+            String t = java.nio.file.Files.readString(java.nio.file.Path.of("servidor.txt")).trim();
+            if (!t.isEmpty()) {
+                return t;
+            }
+        } catch (java.io.IOException e) {
+            // sem arquivo: usa o padrão
+        }
+        return "http://localhost:8000";
+    }
+
+    /** Os diálogos precisam rodar na thread da tela; o trabalho de rede roda fora dela. */
+    private static <T> T naTela(Supplier<T> pedido) {
+        Object[] caixa = new Object[1];
+        try {
+            SwingUtilities.invokeAndWait(() -> caixa[0] = pedido.get());
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        @SuppressWarnings("unchecked") T r = (T) caixa[0];
+        return r;
+    }
+
+    private void cadastrarEmpresa() {
+        comBotoesDesligados(() -> {
+            escrever("");
+            escrever("Cadastrar a empresa do certificado no NFS-e");
+            try {
+                if (storeAberta == null) {
+                    storeAberta = Nucleo.abrirStoreDoWindows();
+                }
+                List<CadastroEmpresa.Dados> empresas = new ArrayList<>();
+                List<String> rotulos = new ArrayList<>();
+                for (var c : Nucleo.listarCertificados(storeAberta)) {
+                    var dados = CadastroEmpresa.extrair(c.subject());
+                    if (dados.isPresent()) {
+                        empresas.add(dados.get());
+                        rotulos.add(dados.get().razaoSocial() + "  (" + dados.get().cnpj() + ")"
+                            + (c.vencido() ? "  [VENCIDO]" : ""));
+                    } else {
+                        escrever("  ignorado (não é e-CNPJ no padrão ICP-Brasil): " + c.subject());
+                    }
+                }
+                if (empresas.isEmpty()) {
+                    escrever("Nenhum e-CNPJ encontrado em Pessoal (CurrentUser\\My). Nada foi cadastrado.");
+                    return;
+                }
+                int escolhida = 0;
+                if (empresas.size() > 1) {
+                    Object o = naTela(() -> JOptionPane.showInputDialog(this, "Qual empresa cadastrar?",
+                        "NFS-e", JOptionPane.QUESTION_MESSAGE, null, rotulos.toArray(), rotulos.get(0)));
+                    if (o == null) {
+                        escrever("Cancelado.");
+                        return;
+                    }
+                    escolhida = rotulos.indexOf(o);
+                }
+                var empresa = empresas.get(escolhida);
+
+                var campoEmail = new JTextField(24);
+                var campoSenha = new JPasswordField(24);
+                int ok = naTela(() -> JOptionPane.showConfirmDialog(this,
+                    new Object[]{"Entre com o seu usuário do sistema NFS-e:", "E-mail", campoEmail, "Senha", campoSenha},
+                    "Cadastrar " + empresa.razaoSocial(), JOptionPane.OK_CANCEL_OPTION));
+                if (ok != JOptionPane.OK_OPTION) {
+                    escrever("Cancelado.");
+                    return;
+                }
+                char[] senha = campoSenha.getPassword();
+                try {
+                    String token = CadastroEmpresa.entrar(enderecoDoSistema(), campoEmail.getText(), new String(senha));
+                    var situacao = CadastroEmpresa.cadastrar(enderecoDoSistema(), token, empresa);
+                    escrever(situacao == CadastroEmpresa.Situacao.CRIADA
+                        ? "CADASTRADA: " + empresa.razaoSocial() + " (" + empresa.cnpj() + "). Atualize a página do NFS-e."
+                        : "Esta empresa já estava cadastrada (" + empresa.cnpj() + "). Nada foi alterado.");
+                } finally {
+                    java.util.Arrays.fill(senha, '\0');
+                    campoSenha.setText("");
+                }
+            } catch (CadastroEmpresa.ErroDeCadastro e) {
+                escrever("NÃO CADASTRADA: " + e.getMessage());
+            } catch (Nucleo.SunMscapiAusenteException e) {
+                escrever("NÃO FOI POSSÍVEL abrir a store do Windows: " + e.getMessage());
+            } catch (Exception e) {
+                escrever("Erro inesperado: " + e);
             }
         });
     }

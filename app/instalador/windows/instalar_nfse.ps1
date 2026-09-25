@@ -216,6 +216,8 @@ function Principal {
     $java = $null
     try {
         $java = Garantir-Java $C
+        # a janela do teste cadastra empresas neste sistema: diz onde ele está
+        [IO.File]::WriteAllText((Join-Path $C.Agente 'servidor.txt'), "http://localhost:$($cfg.porta_api)`n", $script:Utf8SemBom)
         if ($java) { Compilar $java.Javac $C.Agente }
     } catch {
         Dizer "  O teste de certificado não pôde ser instalado ($($_.Exception.Message)). O resto do sistema está funcionando."

@@ -30,7 +30,12 @@ SCRIPT_PADRAO: Final = Path(__file__).with_name("instalar_agente.ps1")
 
 BIBLIOTECA_PADRAO: Final = Path(__file__).with_name("lib_windows.ps1")
 
-ARQUIVOS_JAVA: Final = ("Nucleo.java", "ProvarHandshakeMTLS.java", "ProvarHandshakeMTLSGui.java")
+ARQUIVOS_JAVA: Final = (
+    "Nucleo.java",
+    "CadastroEmpresa.java",
+    "ProvarHandshakeMTLS.java",
+    "ProvarHandshakeMTLSGui.java",
+)
 
 _URL_SEGURA: Final = re.compile(r"^https?://[A-Za-z0-9._\-]+(:\d{1,5})?$")
 

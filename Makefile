@@ -9,7 +9,9 @@ APP   = -e DATABASE_URL="postgresql+psycopg://nfse_app:$(APW)@db:5432/nfse" \
         -e REDIS_URL="redis://redis:6379/0"
 RUN   = docker compose run --rm
 
-.PHONY: up down build migrate test test-web test-windows test-local instalador-windows lint types reversivel
+# Lógica Java do agente (cadastro pelo certificado) contra um servidor de mentira.
+test-agente: ; docker run --rm -v "$(CURDIR)":/w:ro -w /w eclipse-temurin:21-jdk sh -c 'mkdir -p /tmp/o && javac -encoding UTF-8 -d /tmp/o agente/spike/*.java tests/agente/TestesCadastro.java && java -cp /tmp/o TestesCadastro'
+.PHONY: up down build migrate test test-web test-windows test-local test-agente instalador-windows lint types reversivel
 up:      ; docker compose up -d db redis
 down:    ; docker compose down
 build:   ; docker compose build
