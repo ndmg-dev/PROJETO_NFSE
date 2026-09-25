@@ -29,11 +29,14 @@ function Instalar-Codigo($C, [string]$Payload) {
     try {
         Expandir-Pacote (Extrair-Payload $Payload) $tmp
         Parar-Api $C
+        Parar-Postgres $C
+        foreach ($id in (Encerrar-Processos-Da-Instalacao $C)) { Dizer "  encerrei um processo antigo do NFS-e (pid $id)." }
         foreach ($par in @(@('codigo', $C.Codigo), @('bin', $C.Bin), @('agente', $C.Agente))) {
             $origem = Join-Path $tmp $par[0]
             if (-not (Test-Path -LiteralPath $origem)) { throw "O pacote está incompleto: falta a pasta $($par[0])." }
-            if (Test-Path -LiteralPath $par[1]) { Remove-Item -LiteralPath $par[1] -Recurse -Force }
-            Move-Item -LiteralPath $origem -Destination $par[1]
+            try { Substituir-Pasta $origem $par[1] }
+            catch { throw "Não consegui atualizar a pasta $($par[1]): $($_.Exception.Message)`
+Feche janelas do Explorer e programas abertos nessa pasta (e o antivírus, se estiver varrendo) e rode de novo." }
         }
     } finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
 }

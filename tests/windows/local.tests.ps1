@@ -31,6 +31,28 @@ Conferir 'o script executado não tem erro de sintaxe' ($erros.Count -eq 0)
 Conferir 'o pacote em base64 NÃO vai junto para o Invoke-Expression' ($extraidoLocal -notmatch '(?m)^[A-Za-z0-9+/=]{70,}$' -and $extraidoLocal -match 'function Principal')
 Remove-Item Env:NFSE_INSTALADOR
 
+Write-Host "`nprocessos que seguram a pasta de instalação"
+$tmpProc = Join-Path ([IO.Path]::GetTempPath()) ('nfse-proc-' + [guid]::NewGuid())
+$base = Join-Path $tmpProc 'inst'
+$Cx = Caminhos-Nfse $base
+New-Item -ItemType Directory -Force -Path (Join-Path $base 'python') | Out-Null
+Copy-Item (Get-Command sleep).Source (Join-Path $base 'python/preso')   # binário de verdade: o caminho do processo é o dele
+$dentro = Start-Process -FilePath (Join-Path $base 'python/preso') -ArgumentList '60' -PassThru
+$fora = Start-Process -FilePath '/bin/sleep' -ArgumentList '60' -PassThru
+Start-Sleep -Milliseconds 400
+$mortos = @(Encerrar-Processos-Da-Instalacao $Cx)
+$dentro.Refresh(); $fora.Refresh()
+Conferir 'encerra o processo que roda de dentro da pasta de instalação' ($dentro.HasExited -and ($mortos -contains $dentro.Id))
+Conferir 'NÃO encerra processo de fora da pasta' (-not $fora.HasExited)
+Stop-Process -Id $fora.Id -Force -ErrorAction SilentlyContinue
+$o = Join-Path $tmpProc 'orig'; $d = Join-Path $tmpProc 'dest'
+New-Item -ItemType Directory -Force -Path $o, $d | Out-Null
+Set-Content (Join-Path $o 'novo.txt') 'n'; Set-Content (Join-Path $d 'velho.txt') 'v'
+Substituir-Pasta $o $d
+Conferir 'Substituir-Pasta troca o conteúdo' ((Test-Path (Join-Path $d 'novo.txt')) -and -not (Test-Path (Join-Path $d 'velho.txt')))
+$o2 = Join-Path $tmpProc 'orig2'; New-Item -ItemType Directory -Force -Path $o2 | Out-Null
+Conferir 'Substituir-Pasta desiste com erro depois das tentativas (destino impossível)' (Lanca { Substituir-Pasta $o2 (Join-Path (Join-Path $tmpProc 'arquivo.txt') 'x') 2 })
+
 Write-Host "`ninstalação nova: nada instalado ainda"
 $vazio = Caminhos-Nfse (Join-Path ([IO.Path]::GetTempPath()) ('nfse-vazio-' + [guid]::NewGuid()))
 Conferir 'Postgres-Rodando é falso, sem exceção, quando o pg_ctl.exe não existe' ((Postgres-Rodando $vazio) -eq $false)

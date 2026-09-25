@@ -302,6 +302,39 @@ function Parar-Api($C) {
     Remove-Item -LiteralPath $arquivo -Force -ErrorAction SilentlyContinue
 }
 
+# Encerra QUALQUER processo que esteja rodando de dentro da pasta de instalação (python,
+# postgres, java de uma tentativa anterior que falhou ou foi interrompida): eles seguram
+# as pastas e impedem a troca do código. Só toca no que roda de dentro de $C.Base.
+function Encerrar-Processos-Da-Instalacao($C) {
+    $raiz = ([IO.Path]::GetFullPath($C.Base)).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $encerrados = @()
+    foreach ($p in @(Get-Process -ErrorAction SilentlyContinue)) {
+        if ($p.Id -eq $PID) { continue }
+        $caminho = $null
+        try { $caminho = $p.Path } catch { }
+        if ($caminho -and $caminho.StartsWith($raiz, [StringComparison]::OrdinalIgnoreCase)) {
+            try { Stop-Process -Id $p.Id -Force -ErrorAction Stop; $encerrados += $p.Id } catch { }
+        }
+    }
+    if ($encerrados.Count -gt 0) { Start-Sleep -Milliseconds 800 }
+    return $encerrados
+}
+
+# Remove e recria uma pasta. Logo depois de extrair arquivos, o antivírus ou o Explorer
+# costumam segurá-la por instantes: tenta de novo antes de desistir.
+function Substituir-Pasta([string]$Origem, [string]$Destino, [int]$Tentativas = 8) {
+    for ($i = 1; $i -le $Tentativas; $i++) {
+        try {
+            if (Test-Path -LiteralPath $Destino) { Remove-Item -LiteralPath $Destino -Recurse -Force -ErrorAction Stop }
+            Move-Item -LiteralPath $Origem -Destination $Destino -ErrorAction Stop
+            return
+        } catch {
+            if ($i -eq $Tentativas) { throw }
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+
 # Liga o que estiver desligado e devolve a configuração. Idempotente: é o que o atalho
 # "NFS-e" faz toda vez que é aberto.
 function Ligar-Sistema($C) {
