@@ -135,10 +135,18 @@ public final class ProvarHandshakeMTLSGui extends JFrame {
             escrever("");
             escrever("Testando conexão em " + url + " ...");
             try {
+                if (storeAberta == null || Nucleo.listarCertificados(storeAberta).isEmpty()) {
+                    escrever("NADA FOI TESTADO: não há certificado em Pessoal (CurrentUser\\My).");
+                    escrever("Instale o certificado A1 neste Windows e clique em \"1. Ver certificados\".");
+                    return;
+                }
                 var resposta = Nucleo.provarHandshake(storeAberta, url);
                 escrever("Resposta HTTP " + resposta.statusCode());
-                escrever("SUCESSO: a conexão foi estabelecida apresentando um certificado");
-                escrever("desta máquina, sem que a chave privada saísse do Windows.");
+                escrever("A conexão TLS foi concluída e o Java teve acesso ao(s) certificado(s)");
+                escrever("sem que a chave privada saísse do Windows.");
+                escrever("ATENÇÃO: só é PROVA de que o certificado foi aceito se o servidor exigir");
+                escrever("certificado de cliente (o endereço real do ADN). Em um site comum, como");
+                escrever("badssl.com, a conexão funciona com ou sem certificado.");
             } catch (Exception e) {
                 escrever("A conexão falhou: " + e);
                 escrever("Se a mensagem falar de rede/proxy, pode ser bloqueio de firewall,");
