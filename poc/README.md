@@ -1,6 +1,6 @@
 # Fase 0 — prova de conceito
 
-Objetivo (spec §12): provar que `GET /contribuintes/DFe/{NSU}` devolve o mesmo
+Objetivo (spec §12): provar que `GET /DFe/{NSU}` devolve o mesmo
 conjunto de notas que o Portal Nacional exporta em planilha.
 
 **Critério de aceite:** AB Engenharia (07.199.546/0001-62), 08/2026, como
@@ -16,12 +16,16 @@ tomadora — 78 notas, R$ 198.227,91.
 | Decodificação base64/gzip do DF-e | escrito e testado |
 | Tolerância a namespace inesperado | escrito e testado |
 | Comparador × planilha | escrito e **executado contra a referência real** |
-| **Nomes de campo da resposta do ADN** | **desconhecidos** — bloco HIPÓTESES |
+| **Nomes de campo da resposta do ADN** | confirmados pelo **esquema** do Swagger (25/09/2026); **não confirmados contra dado real** |
 | **Tags do XML da NFS-e** | **desconhecidas** — bloco HIPÓTESES |
 
-O Manual dos Contribuintes v1.0 (12/02/2026) não documenta formato de resposta,
-paginação, tamanho de lote nem rate limit. O Swagger da produção restrita exige
-certificado de cliente — não há como ler o contrato sem um `.pfx`.
+O Swagger da produção restrita
+(`https://adn.producaorestrita.nfse.gov.br/contribuintes/docs/index.html`) já
+deu os nomes de campo do envelope e de `DistribuicaoNSU` (ver
+`app/adn/contrato.py`), mas é documentação estática — sem "Try it out". Falta
+uma chamada real com o `.pfx` para confirmar que o corpo de verdade bate com o
+esquema documentado, e para descobrir o layout do XML (que o Swagger não
+mostra).
 
 ## Instalação
 

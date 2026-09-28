@@ -1,27 +1,47 @@
-"""O contrato do ADN — e o que dele ainda é desconhecido.
+"""O contrato do ADN.
 
-ESTADO: NÃO VERIFICADO CONTRA O ADN REAL.
+ESTADO: nomes de campo confirmados pelo Swagger real da produção restrita
+(https://adn.producaorestrita.nfse.gov.br/contribuintes/docs/index.html,
+lido em 25/09/2026). Ainda NÃO confirmado contra uma resposta com dados
+reais (nenhum NSU com documento foi consultado) — os candidatos continuam
+como rede de segurança para esse dia.
 
-O Manual dos Contribuintes v1.0 (12/02/2026) descreve a existência de
-`GET /DFe/{NSU}` e `GET /NFSe/{chave}/Eventos` e nada mais: não fixa nomes de
-campo da resposta, paginação, tamanho de lote, rate limit nem o código de fila
-vazia. A spec §3.2 marca tudo isso como "a validar em homologação". O Swagger
-da produção restrita exige certificado de cliente, então não há como ler o
-contrato sem um .pfx.
+Envelope de `GET /DFe/{NSU}` (PascalCase, `text/plain` com corpo JSON):
+  StatusProcessamento: "REJEICAO" | "NENHUM_DOCUMENTO_LOCALIZADO" | "DOCUMENTOS_LOCALIZADOS"
+  LoteDFe: array de DistribuicaoNSU | null
+  Alertas, Erros: array de MensagemProcessamento | null
+  TipoAmbiente: "PRODUCAO" | "HOMOLOGACAO"
+  VersaoAplicativo: string | null
+  DataHoraProcessamento: datetime
 
-Este módulo é a ÚNICA fronteira onde essas incógnitas moram. Tudo o mais no
-sistema — loop de NSU, checkpoint, backoff, fila morta, detecção de lacuna —
-é testado contra a forma declarada aqui e não muda quando os nomes reais
-aparecerem.
+DistribuicaoNSU: NSU (int|null), ChaveAcesso (str|null), TipoDocumento
+(enum: NENHUM/DPS/PEDIDO_REGISTRO_EVENTO/NFSE/EVENTO/CNC), TipoEvento
+(enum|null), ArquivoXml (str|null, GZip+base64 por "Padrões técnicos"),
+DataHoraGeracao (datetime|null).
 
-COMO FECHAR ISTO
-1. `python poc/fase0_dfe.py --ambiente restrita --pfx ... --dump-contrato`
-2. substituir cada tupla de candidatos pelo nome único e verdadeiro
-3. trocar `VERIFICADO = False` por `True` e rodar a suíte
+NÃO existe campo de "próximo NSU" ou "máximo NSU" no envelope — ao
+contrário do que as hipóteses antigas supunham. A paginação só pode vir do
+maior NSU dentro do próprio `LoteDFe` (`Lote.maior_nsu`); `max_nsu`/
+`ult_nsu` ficam sempre `None` e são só otimização dormente para o dia em
+que o ADN passar a expor isso.
 
-Enquanto `VERIFICADO` for False, `Contrato.extrair_lote` aceita qualquer um
-dos candidatos, mas NUNCA escolhe em silêncio: se nenhum casar, levanta
-`ContratoDesconhecido` com as chaves reais que vieram.
+Query params de `/DFe/{NSU}`: `cnpjConsulta` (opcional) e `lote` (bool,
+default `true`).
+
+Este módulo é a ÚNICA fronteira onde a forma exata da resposta mora. Tudo o
+mais no sistema — loop de NSU, checkpoint, backoff, fila morta, detecção de
+lacuna — é testado contra a forma declarada aqui.
+
+COMO ACABAR DE FECHAR
+1. Rodar uma chamada real (sonda ou app) contra um NSU com documento e
+   confirmar que os nomes acima batem com o corpo de verdade, não só com
+   o esquema documentado.
+2. Se baterem, remover as tuplas `CANDIDATOS_*` e a lógica de fallback.
+
+`extrair_lote` aceita os nomes reais (primeira opção de cada tupla) e cai
+para os candidatos antigos só como rede de segurança; se nada casar,
+levanta `ContratoDesconhecido` com as chaves reais que vieram — nunca
+escolhe em silêncio.
 """
 
 from __future__ import annotations
@@ -43,7 +63,7 @@ Json: TypeAlias = (  # noqa: UP040 — ruff quer PEP 695, mypy 1.11 ainda não o
 
 VERIFICADO: Final = False
 
-CANDIDATOS_LOTE: Final[tuple[str, ...]] = ("loteDFe", "LoteDFe", "documentos", "DFe", "lote")
+CANDIDATOS_LOTE: Final[tuple[str, ...]] = ("LoteDFe", "loteDFe", "documentos", "DFe", "lote")
 CANDIDATOS_NSU_DOC: Final[tuple[str, ...]] = ("NSU", "nsu")
 CANDIDATOS_CONTEUDO: Final[tuple[str, ...]] = (
     "ArquivoXml", "arquivoXml", "XmlDFe", "xml", "documento",
@@ -51,6 +71,8 @@ CANDIDATOS_CONTEUDO: Final[tuple[str, ...]] = (
 CANDIDATOS_TIPO: Final[tuple[str, ...]] = (
     "TipoDocumento", "tipoDocumento", "tipo", "schema",
 )
+# O envelope real não tem campo de máximo/último NSU (ver docstring do
+# módulo). Mantidas por segurança caso o ADN passe a expor isso.
 CANDIDATOS_MAX_NSU: Final[tuple[str, ...]] = ("maxNSU", "MaxNSU", "maximoNSU")
 CANDIDATOS_ULT_NSU: Final[tuple[str, ...]] = ("ultNSU", "ultimoNSU", "UltimoNSU")
 

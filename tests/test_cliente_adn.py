@@ -93,19 +93,19 @@ def test_backoff_nunca_passa_do_teto() -> None:
 
 @respx.mock
 def test_204_e_fila_vazia(cliente: ClienteADN) -> None:
-    respx.get(f"{BASE}/contribuintes/DFe/1").mock(httpx.Response(204))
+    respx.get(f"{BASE}/DFe/1").mock(httpx.Response(204))
     assert cliente.buscar_dfe(1).lote is None
 
 
 @respx.mock
 def test_404_tratado_como_fim_da_fila(cliente: ClienteADN) -> None:
-    respx.get(f"{BASE}/contribuintes/DFe/1").mock(httpx.Response(404))
+    respx.get(f"{BASE}/DFe/1").mock(httpx.Response(404))
     assert cliente.buscar_dfe(1).lote is None
 
 
 @respx.mock
 def test_corpo_vazio_e_fila_vazia(cliente: ClienteADN) -> None:
-    respx.get(f"{BASE}/contribuintes/DFe/1").mock(httpx.Response(200, content=b""))
+    respx.get(f"{BASE}/DFe/1").mock(httpx.Response(200, content=b""))
     assert cliente.buscar_dfe(1).lote is None
 
 
@@ -116,7 +116,7 @@ def test_corpo_vazio_e_fila_vazia(cliente: ClienteADN) -> None:
 def test_429_repete_e_respeita_retry_after(
     cliente: ClienteADN, relogio: Relogio
 ) -> None:
-    rota = respx.get(f"{BASE}/contribuintes/DFe/1")
+    rota = respx.get(f"{BASE}/DFe/1")
     rota.side_effect = [
         httpx.Response(429, headers={"Retry-After": "7"}),
         httpx.Response(200, json=lote_json(1)),
@@ -128,7 +128,7 @@ def test_429_repete_e_respeita_retry_after(
 @respx.mock
 @pytest.mark.parametrize("status", [500, 502, 503, 504])
 def test_5xx_repete(cliente: ClienteADN, relogio: Relogio, status: int) -> None:
-    rota = respx.get(f"{BASE}/contribuintes/DFe/1")
+    rota = respx.get(f"{BASE}/DFe/1")
     rota.side_effect = [httpx.Response(status), httpx.Response(200, json=lote_json(1))]
     assert cliente.buscar_dfe(1).lote is not None
     assert len(relogio.esperas) == 1
@@ -138,7 +138,7 @@ def test_5xx_repete(cliente: ClienteADN, relogio: Relogio, status: int) -> None:
 def test_desiste_depois_do_maximo_de_tentativas(
     cliente: ClienteADN, relogio: Relogio
 ) -> None:
-    respx.get(f"{BASE}/contribuintes/DFe/1").mock(httpx.Response(503))
+    respx.get(f"{BASE}/DFe/1").mock(httpx.Response(503))
     with pytest.raises(AdnIndisponivel, match="tentativas esgotadas"):
         cliente.buscar_dfe(1)
     assert len(relogio.esperas) == MAX_TENTATIVAS
@@ -146,7 +146,7 @@ def test_desiste_depois_do_maximo_de_tentativas(
 
 @respx.mock
 def test_falha_de_rede_tambem_repete(cliente: ClienteADN, relogio: Relogio) -> None:
-    rota = respx.get(f"{BASE}/contribuintes/DFe/1")
+    rota = respx.get(f"{BASE}/DFe/1")
     rota.side_effect = [
         httpx.ConnectError("sem rota"),
         httpx.Response(200, json=lote_json(1)),
@@ -163,7 +163,7 @@ def test_erro_definitivo_nao_repete(
     cliente: ClienteADN, relogio: Relogio, status: int
 ) -> None:
     """Certificado errado ou vencido: repetir só gasta cota."""
-    respx.get(f"{BASE}/contribuintes/DFe/1").mock(
+    respx.get(f"{BASE}/DFe/1").mock(
         httpx.Response(status, json={"erro": "CNPJ 07199546000162 sem permissão"})
     )
     with pytest.raises(AdnRecusou) as exc:
@@ -174,7 +174,7 @@ def test_erro_definitivo_nao_repete(
 
 @respx.mock
 def test_resposta_nao_json_para_em_vez_de_chutar(cliente: ClienteADN) -> None:
-    respx.get(f"{BASE}/contribuintes/DFe/1").mock(
+    respx.get(f"{BASE}/DFe/1").mock(
         httpx.Response(200, content=b"<html>manutencao</html>")
     )
     with pytest.raises(ContratoDesconhecido):
@@ -185,7 +185,7 @@ def test_resposta_nao_json_para_em_vez_de_chutar(cliente: ClienteADN) -> None:
 def test_contrato_diferente_do_esperado_para_e_mostra_as_chaves_reais(
     cliente: ClienteADN,
 ) -> None:
-    respx.get(f"{BASE}/contribuintes/DFe/1").mock(
+    respx.get(f"{BASE}/DFe/1").mock(
         httpx.Response(200, json={"nomeQueNaoPrevimos": []})
     )
     with pytest.raises(ContratoDesconhecido) as exc:
@@ -198,7 +198,7 @@ def test_contrato_diferente_do_esperado_para_e_mostra_as_chaves_reais(
 
 @respx.mock
 def test_traduz_o_lote(cliente: ClienteADN) -> None:
-    respx.get(f"{BASE}/contribuintes/DFe/5").mock(
+    respx.get(f"{BASE}/DFe/5").mock(
         httpx.Response(200, json=lote_json(5, 6, 7, max_nsu=99))
     )
     lote = cliente.buscar_dfe(5).lote
@@ -211,11 +211,11 @@ def test_traduz_o_lote(cliente: ClienteADN) -> None:
 
 @respx.mock
 def test_envia_cnpj_de_consulta_quando_informado(cliente: ClienteADN) -> None:
-    rota = respx.get(f"{BASE}/contribuintes/DFe/1").mock(
+    rota = respx.get(f"{BASE}/DFe/1").mock(
         httpx.Response(200, json=lote_json(1))
     )
     cliente.buscar_dfe(1, cnpj_consulta="07199546000162")
-    assert rota.calls.last.request.url.params["cnpj"] == "07199546000162"
+    assert rota.calls.last.request.url.params["cnpjConsulta"] == "07199546000162"
 
 
 def test_ambiente_invalido() -> None:
@@ -257,7 +257,7 @@ def test_5xx_sem_corpo_nao_e_confundido_com_fila_vazia(
 ) -> None:
     """Regressão: um 503 sem corpo era lido como fim da fila, e a varredura
     parava cedo perdendo notas em silêncio."""
-    rota = respx.get(f"{BASE}/contribuintes/DFe/1")
+    rota = respx.get(f"{BASE}/DFe/1")
     rota.side_effect = [
         httpx.Response(503, content=b""),
         httpx.Response(200, json=lote_json(1)),

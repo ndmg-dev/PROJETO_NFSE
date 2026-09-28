@@ -52,24 +52,28 @@ BASE_URLS: dict[str, str] = {
     "producao": "https://adn.nfse.gov.br",
 }
 
-ROTA_DFE = "/contribuintes/DFe/{nsu}"
+ROTA_DFE = "/DFe/{nsu}"
 
 # ---------------------------------------------------------------------------
-# HIPÓTESES — o contrato do ADN NÃO está documentado
+# HIPÓTESES — nomes de campo confirmados pelo ESQUEMA, não por dado real
 # ---------------------------------------------------------------------------
-# O Manual dos Contribuintes v1.0 (12/02/2026) descreve apenas a existência de
-# GET /DFe/{NSU}; não fixa nomes de campo, paginação, tamanho de lote, rate
-# limit nem o código de fila vazia. A spec §3.2 marca tudo isso como "a validar
-# em homologação".
+# O Swagger real da produção restrita
+# (https://adn.producaorestrita.nfse.gov.br/contribuintes/docs/index.html,
+# lido em 25/09/2026) fixa os nomes de campo em PascalCase — primeira opção de
+# cada lista abaixo. Isso ainda não foi confirmado contra uma resposta de
+# verdade (nenhuma chamada real foi feita até aqui), por isso os candidatos
+# antigos ficam como rede de segurança.
 #
-# As listas abaixo são CANDIDATOS, não fatos. O script nunca escolhe um
-# silenciosamente: se nenhum candidato casar, ele aborta com as chaves reais da
-# resposta (ContratoDesconhecido). Depois da primeira execução com certificado,
-# substitua cada lista pelo nome único e verdadeiro e apague o resto.
+# Confirmado também: NÃO existe campo de "próximo/máximo NSU" no envelope —
+# CANDIDATOS_ULTIMO_NSU/CANDIDATOS_MAX_NSU nunca vão casar contra a API real;
+# ficam só para o caso de o ADN passar a expor isso.
 #
-# STATUS: NÃO VERIFICADO — nenhuma execução real contra o ADN até aqui.
+# O script nunca escolhe um candidato silenciosamente: se nenhum casar, ele
+# aborta com as chaves reais da resposta (ContratoDesconhecido).
+#
+# STATUS: esquema confirmado, dado real ainda NÃO verificado.
 
-CANDIDATOS_LOTE: tuple[str, ...] = ("loteDFe", "LoteDFe", "documentos", "DFe", "lote")
+CANDIDATOS_LOTE: tuple[str, ...] = ("LoteDFe", "loteDFe", "documentos", "DFe", "lote")
 CANDIDATOS_NSU_DOC: tuple[str, ...] = ("NSU", "nsu")
 CANDIDATOS_CONTEUDO: tuple[str, ...] = ("ArquivoXml", "arquivoXml", "XmlDFe", "xml", "documento")
 CANDIDATOS_TIPO: tuple[str, ...] = ("TipoDocumento", "tipoDocumento", "tipo", "schema")
@@ -400,9 +404,7 @@ def buscar_nsu(
 ) -> httpx.Response:
     params = {}
     if cnpj_consulta:
-        # O manual v1.0 cita "um novo parâmetro" para consultar CNPJ distinto do
-        # certificado, mas não dá o nome. HIPÓTESE — confirmar no Swagger.
-        params["cnpj"] = cnpj_consulta
+        params["cnpjConsulta"] = cnpj_consulta
 
     ultimo: httpx.Response | None = None
     for tentativa in range(MAX_TENTATIVAS):

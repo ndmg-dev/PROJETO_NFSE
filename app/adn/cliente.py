@@ -26,7 +26,7 @@ BASE_URLS: Final[dict[str, str]] = {
     "restrita": "https://adn.producaorestrita.nfse.gov.br",
     "producao": "https://adn.nfse.gov.br",
 }
-ROTA_DFE: Final = "/contribuintes/DFe/{nsu}"
+ROTA_DFE: Final = "/DFe/{nsu}"
 
 BACKOFF_BASE_S: Final = 1.0
 BACKOFF_FATOR: Final = 2.0
@@ -94,7 +94,7 @@ class ClienteADN:
         self._cliente.close()
 
     def buscar_dfe(self, nsu: int, cnpj_consulta: str | None = None) -> RespostaDFe:
-        params = {"cnpj": cnpj_consulta} if cnpj_consulta else None
+        params = {"cnpjConsulta": cnpj_consulta} if cnpj_consulta else None
         ultimo_status = 0
 
         for tentativa in range(MAX_TENTATIVAS):
