@@ -24,6 +24,7 @@ if errorlevel 1 (
 )
 
 set /p PFX="Caminho do arquivo .pfx do certificado: "
+set PFX=%PFX:"=%
 if not exist "%PFX%" (
     echo ERRO: nao encontrei o arquivo "%PFX%"
     pause
