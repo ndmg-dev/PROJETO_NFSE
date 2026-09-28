@@ -113,15 +113,23 @@ class FalhaPermanente(RuntimeError):
 
 
 def _dir_tmpfs() -> Path:
-    """Diretório em memória para o PEM temporário. Nunca em disco persistente."""
-    for candidato in ("/dev/shm", "/run/user/%d" % os.getuid()):
-        p = Path(candidato)
-        if p.is_dir() and os.access(p, os.W_OK):
-            return p
-    raise FalhaPermanente(
-        "Nenhum tmpfs gravável encontrado (/dev/shm). Recuso-me a escrever a "
-        "chave privada em disco persistente."
-    )
+    """Diretório em memória para o PEM temporário, quando existir.
+
+    Linux/Mac têm tmpfs (/dev/shm, /run/user/UID) e usamos ele. O Windows não
+    tem equivalente sem ferramenta extra — cai no diretório temporário comum
+    (disco), que é o melhor possível ali. Em qualquer caso o PEM é apagado no
+    `finally` de quem chama esta função.
+    """
+    if sys.platform != "win32":
+        for candidato in ("/dev/shm", "/run/user/%d" % os.getuid()):
+            p = Path(candidato)
+            if p.is_dir() and os.access(p, os.W_OK):
+                return p
+        raise FalhaPermanente(
+            "Nenhum tmpfs gravável encontrado (/dev/shm). Recuso-me a escrever a "
+            "chave privada em disco persistente."
+        )
+    return Path(tempfile.gettempdir())
 
 
 @dataclass
