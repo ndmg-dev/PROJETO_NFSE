@@ -4,3 +4,4 @@ pytest-asyncio==0.24.0
 respx==0.21.1
 mypy==1.11.2
 ruff==0.6.8
+truststore==0.9.2

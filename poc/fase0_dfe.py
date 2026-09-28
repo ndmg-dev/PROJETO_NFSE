@@ -42,6 +42,16 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import truststore
+
+# O OpenSSL empacotado com o instalador oficial do Python para Windows não
+# lê o repositório de certificados do Windows por padrão — só os caminhos
+# padrão do próprio OpenSSL, que não existem lá. Isso faz
+# `ssl.create_default_context()` não confiar em nenhuma CA e toda conexão
+# HTTPS falhar com CERTIFICATE_VERIFY_FAILED, mesmo com o navegador abrindo o
+# mesmo site sem aviso nenhum. `truststore` corrige isso globalmente,
+# inclusive em Linux/Mac.
+truststore.inject_into_ssl()
 
 # ---------------------------------------------------------------------------
 # Ambientes (spec §3.1)

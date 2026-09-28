@@ -16,6 +16,8 @@
 | Restauração de cópia não subia no ensaio | Zip sem pastas vazias/modo 0700 | Incluir pastas vazias (o .NET inclui); chmod só no Linux |
 | BOM inserido em script `.ps1` por edição | `utf-8-sig` na gravação | Conferir com `xxd`; o BOM no meio da concatenação quebra o parse |
 | Gate com `tail` deixou commit passar com teste vermelho | Pipe mascara o código de saída | Redirecionar para arquivo e testar `$?` |
+| Sonda do ADN falhou no Windows: `AttributeError: os.getuid` | `_dir_tmpfs()` só cobria Linux/Mac | Checar `sys.platform`; Windows cai no diretório temporário comum |
+| Sonda do ADN falhou no Windows com `CERTIFICATE_VERIFY_FAILED` mesmo com o navegador abrindo o mesmo site sem aviso | O OpenSSL do instalador oficial do Python p/ Windows não lê o repositório de certificados do Windows por padrão | `truststore.inject_into_ssl()` antes de criar o `SSLContext`; **isto vai afetar o agente real também quando ele fizer a chamada ao ADN no Windows do cliente** — aplicar lá também |
 
 ## Lições gerais
 - Um teste que **refaz** a lógica do código em vez de executá-la esconde defeitos. Prefira executar o artefato real.
