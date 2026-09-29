@@ -460,6 +460,22 @@ def percorrer_fila(
     while True:
         resp = buscar_nsu(cliente, nsu, cnpj_consulta, log)
 
+        if dump_contrato and resp.content:
+            destino = dir_contrato / f"dfe_nsu{nsu:012d}_http{resp.status_code}.json"
+            destino.write_bytes(resp.content)
+            log("\n=== CONTRATO CRU (--dump-contrato) ===")
+            log(f"HTTP {resp.status_code}")
+            for k, v in resp.headers.items():
+                log(f"  {k}: {v}")
+            try:
+                corpo = json.loads(resp.content)
+                log(f"chaves de topo: {sorted(corpo.keys())}" if isinstance(corpo, dict) else "corpo não é objeto")
+                log(json.dumps(corpo, indent=2, ensure_ascii=False)[:8000])
+            except json.JSONDecodeError:
+                log(f"corpo não é JSON, primeiros 2000 bytes: {resp.content[:2000]!r}")
+            log(f"\nresposta completa em {destino}")
+            return
+
         if resp.status_code == 204 or not resp.content:
             log(f"  NSU {nsu}: fila vazia (HTTP {resp.status_code}). Fim.")
             return
@@ -480,16 +496,6 @@ def percorrer_fila(
             raise ContratoDesconhecido(
                 f"NSU {nsu}: resposta não é JSON ({exc}). Salva em {destino}."
             ) from None
-
-        if dump_contrato:
-            log("\n=== CONTRATO CRU (primeira resposta não vazia) ===")
-            log(f"HTTP {resp.status_code}")
-            for k, v in resp.headers.items():
-                log(f"  {k}: {v}")
-            log(f"chaves de topo: {sorted(payload.keys())}")
-            log(json.dumps(payload, indent=2, ensure_ascii=False)[:8000])
-            log(f"\nresposta completa em {destino}")
-            return
 
         k_lote = exigir_chave(payload, CANDIDATOS_LOTE, "lote de documentos", destino)
         lote = payload[k_lote] or []

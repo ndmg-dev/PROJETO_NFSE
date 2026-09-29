@@ -25,6 +25,16 @@ Lido em `https://adn.producaorestrita.nfse.gov.br/contribuintes/docs/index.html`
 - **Não existe campo de "próximo/máximo NSU"** no envelope — ao contrário do que se supunha. A paginação só pode
   vir do maior NSU dentro do próprio `LoteDFe` (já é o que `Lote.maior_nsu` calcula).
 
+## Confirmado com chamada real (29/09/2026, ambientes restrita e produção)
+Testado com 5 certificados reais (não a AB Engenharia) em ambos os ambientes: todos devolveram
+`HTTP 404` com corpo **vazio** (`content-length: 0`) para o NSU 0 — confirma que
+`STATUS_FILA_VAZIA` inclui 404 vazio de verdade, não é só hipótese do modelo de referência da NF-e.
+Nenhuma dessas 5 empresas tem documento distribuído pelo ADN em nenhum dos dois ambientes (não
+emitem pela NFS-e Nacional ainda, ou a prefeitura não migrou — não é falha do cliente).
+**Ainda falta**: uma resposta `DOCUMENTOS_LOCALIZADOS` de verdade para confirmar os nomes de campo
+de `LoteDFe`. Precisa do `.pfx` de uma empresa que realmente tenha notas — candidata natural é a
+AB Engenharia (mesmo CNPJ do critério de aceite da Fase 0).
+
 ## NÃO documentado ainda (não inventar)
 Se `NENHUM_DOCUMENTO_LOCALIZADO` vem com `LoteDFe=null` ou `[]`; tamanho máximo do lote por chamada; rate limit;
 código HTTP de erro genérico (o Swagger só documenta 200/400/404); tabela completa de eventos → situação de
